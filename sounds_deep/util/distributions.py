@@ -1,8 +1,8 @@
 import numpy as np
 import tensorflow as tf
+import sonnet as snt
 
 from sounds_deep.util.shaping import flatten
-
 
 def bernoulli_joint_log_likelihood(x_in, re_x):
     '''
@@ -29,3 +29,16 @@ def std_gaussian_KL_divergence(mu, log_sigma):
     """ Analytic KL-div between N(mu, e^log_sigma) and N(0, 1) """
     return -0.5 * tf.reduce_sum(
         1 + log_sigma - tf.square(mu) - tf.exp(log_sigma), 1)
+
+class DiagonalGaussian(snt.AbstractModule):
+    def __init__(self, mean, logvar):
+        self._mean = mean
+        self._logvar = logvar
+
+    def _build(self):
+        noise = tf.random_normal(tf.shape(self._mean))
+        sample = mean + tf.exp(self._logvar) * noise
+        return sample
+
+    # def log_prob(self, sample):
+    #     return -0.5 * (np.log(2 * np.pi) + self._logvar + (tf.square(sample - self._mean) / tf.exp(self._logvar))

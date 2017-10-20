@@ -68,10 +68,11 @@ class TransductiveBoxInference(snt.AbstractModule):
     """
 
     def __init__(self, distribution=tf.contrib.distributions.Normal):
-        super(TransductiveBoxInference, self).__init__(name="TransductiveBoxInference")
+        super(TransductiveBoxInference, self).__init__(
+            name="TransductiveBoxInference")
         self._distribution = distribution
 
-    def _build(self, mu, sigma, lower_bounds, upper_bounds, values):
+    def _build(self, mu, log_sigma, lower_bounds, upper_bounds, values):
         """
         Args:
         - mu, sigma (Tensor): shape [batch_size, latent_dimension]
@@ -80,6 +81,7 @@ class TransductiveBoxInference(snt.AbstractModule):
         """
         # broadcast mu, sigma, and bounds to
         # shape [batch_size, box_num, latent_dimension]
+        sigma = tf.exp(log_sigma)
         mu = tf.tile(tf.expand_dims(mu, 1), [1, tf.shape(lower_bounds)[0], 1])
         sigma = tf.tile(
             tf.expand_dims(sigma, 1), [1, tf.shape(lower_bounds)[0], 1])
@@ -108,7 +110,7 @@ class TransductiveBoxInference(snt.AbstractModule):
 
 if __name__ == '__main__':
     from sklearn.datasets import load_iris
-    
+
     iris = load_iris()
     clf = tree.DecisionTreeClassifier(max_depth=3)
     clf = clf.fit(iris.data, iris.target)
