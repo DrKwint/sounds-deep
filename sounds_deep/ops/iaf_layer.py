@@ -1,9 +1,10 @@
 """ Credit to https://github.com/openai/iaf which was adapted for this """
-import sonnet as snt
 import tensorflow as tf
 
-from util.shaping import split, resize_nearest_neighbor
+import sonnet as snt
 from util.distibutions import DiagonalGaussian
+from util.shaping import resize_nearest_neighbor, split
+
 
 class IAFLayer(snt.AbstractModule):
     def __init__(self, h_size, z_size, mode, downsample):
@@ -187,4 +188,3 @@ class ARConvNet2d(snt.AbstractModule):
                 x += context
             x = tf.nn.elu(x)
         return map(lambda f: f(x), [self._olayers])
-

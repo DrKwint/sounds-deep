@@ -10,4 +10,5 @@ def lazy_property(function):
         if not hasattr(self, attribute):
             setattr(self, attribute, function(self))
         return getattr(self, attribute)
+
     return wrapper

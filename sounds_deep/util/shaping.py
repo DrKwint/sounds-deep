@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
+
 from keras.layers import Flatten
+
 
 def shape(tensor):
     """
@@ -32,6 +34,7 @@ def flatten(tensor):
     else:
         return Flatten()(tensor)
 
+
 def split(x, split_dim, split_sizes):
     n = len(list(x.get_shape()))
     dim_size = np.sum(split_sizes)
@@ -48,6 +51,7 @@ def split(x, split_dim, split_sizes):
         cur_end[split_dim] = split_sizes[i]
         ret += [tf.slice(x, cur_begin, cur_end)]
     return ret
+
 
 def resize_nearest_neighbor(x, scale):
     input_shape = map(int, x.get_shape().as_list())

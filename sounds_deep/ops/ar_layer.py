@@ -1,6 +1,8 @@
 import numpy as np
-import tensoflow as tf
+
 import sonnet as snt
+import tensoflow as tf
+
 
 def get_conv_ar_mask(h, w, n_in, n_out, zerodiagonal=False):
     """
@@ -45,4 +47,3 @@ class ARConvNet2D(snt.AbstractModule):
                 x += context
             x = self.activation(x)
         return [ARConv2D(size, zero_diagonal=True)(x) for size in self._out_output_channels]
-

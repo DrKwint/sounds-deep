@@ -1,7 +1,8 @@
-import sonnet as snt
+import sklearn.decomposition as skd
 import tensorflow as tf
 
-import sklearn.decomposition as skd
+import sonnet as snt
+
 
 class PCA(snt.AbstractModule):
     def __init__(self, n_features, n_components, pca_params={}, name="PCA"):
@@ -14,11 +15,15 @@ class PCA(snt.AbstractModule):
     def _build(self, X):
         centered_X = X - self._mean
         # dot product
-        X_transformed = tf.matmul(centered_X, self._T,)
+        X_transformed = tf.matmul(
+            centered_X,
+            self._T, )
         return X_transformed
 
     def update(self, session, data):
         transformed_data = self._pca.fit_transform(data)
-        session.run([self._mean.assign(self._pca.mean_), self._T.assign(self._pca.components_.T)])
+        session.run([
+            self._mean.assign(self._pca.mean_),
+            self._T.assign(self._pca.components_.T)
+        ])
         return transformed_data
-

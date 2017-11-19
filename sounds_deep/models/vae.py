@@ -2,10 +2,9 @@ import numpy as np
 import tensorflow as tf
 
 from sounds_deep.models.core.simple_model import Model
-# from sounds_deep.models.core.autoencoder_model import AutoencoderModel
 from sounds_deep.util.distributions import (bernoulli_joint_log_likelihood,
-                                                gaussian_sample_log_likelihood,
-                                                std_gaussian_KL_divergence)
+                                            gaussian_sample_log_likelihood,
+                                            std_gaussian_KL_divergence)
 from sounds_deep.util.lazy_property import lazy_property
 from sounds_deep.util.shaping import shape
 
@@ -54,8 +53,8 @@ class VAE(Model):
     @lazy_property
     def loss(self):
         # log p(x|z)
-        self.reconstr_loss = bernoulli_joint_log_likelihood(self.x_in,
-                                                            self.re_x)
+        self.reconstr_loss = bernoulli_joint_log_likelihood(
+            self.x_in, self.re_x)
 
         # KL( q(z|X) || p(z) )
         self.kl_div = std_gaussian_KL_divergence(self.z_mu, self.z_log_sigma)

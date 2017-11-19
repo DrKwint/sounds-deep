@@ -40,11 +40,13 @@ class MemBackedDataset(object):
         self.placeholders = {
             name: tf.placeholder(
                 dtype=self.data[name].dtype, shape=self.data[name].shape)
-            for name in self.names}
+            for name in self.names
+        }
         self.variables = {
             name: tf.Variable(
                 self.placeholders[name], trainable=False, collections=[])
-            for name in self.names}
+            for name in self.names
+        }
 
         # create slice ops
         slice_list = tf.train.slice_input_producer(
@@ -79,8 +81,9 @@ class MemBackedDataset(object):
 
         # inject data
         for name in data:
-            session.run(self.variables[name].initializer,
-                        feed_dict={self.placeholders[name]: data[name]})
+            session.run(
+                self.variables[name].initializer,
+                feed_dict={self.placeholders[name]: data[name]})
 
     def _check_example_numbers(self, data):
         """ Checks if all elements of data have the same first dimension.
