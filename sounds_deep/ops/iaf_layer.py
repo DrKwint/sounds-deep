@@ -3,7 +3,7 @@ import sonnet as snt
 import tensorflow as tf
 
 from util.shaping import split, resize_nearest_neighbor
-
+from util.distibutions import DiagonalGaussian
 
 class IAFLayer(snt.AbstractModule):
     def __init__(self, h_size, z_size, mode, downsample):
@@ -15,22 +15,32 @@ class IAFLayer(snt.AbstractModule):
 
     def _build(self):
         pass
-        
+
 class IAFLayerUp(snt.AbstractModule):
     def __init__(self, h_size, z_size, mode, downsample):
+        self._h_size = h_size
+        self._z_size = z_size
+        self._stride = [2,2] if downsample else [1, 1]
 
     def _build(self, input_t):
+        """
+        Args:
+            input_t
+
+        Returns:
+            A 4-tuple of ...            
+        """
         x = tf.nn.elu(input_t)
         x = snt.Conv2D(
             output_channels=2 * self._z_size + 2 * self._h_size,
             kernel_shape=(3, 3),
-            stride=self._stride)
+            stride=self._stride)(x)
         qz_mean, qz_logsd, up_context, h = split(
             x, 1, [self._z_size, self._z_size, self._h_size, self._h_size])
 
         h = tf.nn.elu(h)
         h = snt.Conv2D(
-            output_channels=self._h_size, kernel_shape=(3, 3), stride=1)
+            output_channels=self._h_size, kernel_shape=(3, 3), stride=1)(h)
 
         if self._downsample:
             input_t = resize_nearest_neighbor(input_t, 0.5)
@@ -56,7 +66,7 @@ class IAFLayerDown(snt.AbstractModule):
 
     def _build(self, input_t, qz_mean, qz_logsd, up_context):
         x = tf.nn.elu(input_t)
-        x = snt.Conv2D(4 * self._z_size, + self._h_size * 2, "down_conv1")
+        x = snt.Conv2D(4 * self._z_size, + self._h_size * 2, [3,3], name="down_conv1")
         pz_mean, pz_logsd, rz_mean, rz_logsd, down_context, h_det = split(x, 1, [self._z_size] * 4 + [self._h_size] * 2)
 
         prior = DiagonalGaussian(pz_mean, pz_logsd)
@@ -70,7 +80,7 @@ class IAFLayerDown(snt.AbstractModule):
 
         # calculate kl_cost and kl_obj
         if self.mode == "sample":
-            kl_cost = kl_obj = tf.zeros(self._batch_size, self._k)
+            kl_cost = kl_obj = tf.zeros([self._batch_size, self._k])
         else:
             logqs = posterior.log_prob(z)
             ar_stack = ARConvNet2d("ar_stack", context, [self._h_size]*2, [self._z_size]*2)

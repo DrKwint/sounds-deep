@@ -14,21 +14,21 @@ def bernoulli_joint_log_likelihood(x_in, re_x):
     return tf.reduce_sum(x_in * tf.log(1e-10 + re_x) + (
         (1 - x_in) * tf.log(1e-10 + 1 - re_x)), 1)
 
+def discretized_logistic(mean, logscale, binsize=1 / 256.0, sample=None):
+    scale = tf.exp(logscale)
+    sample = (tf.floor(sample / binsize) * binsize - mean) / scale
+    logp = tf.log(tf.sigmoid(sample + binsize / scale) - tf.sigmoid(sample) + 1e-7)
 
-def gaussian_sample_log_likelihood(sample, mu, sigma):
-    log2pi = tf.constant(np.log(2.0 * np.pi), dtype=tf.float32)
-    lg_sigma_sq = tf.log(tf.square(sigma))
-    other_term = tf.square(tf.divide(tf.subtract(sample, mu), sigma))
-    term_sum = tf.reduce_sum(
-        tf.add(log2pi, tf.add(lg_sigma_sq, other_term)), 1)
-    log_likelihood = tf.multiply(0.5, term_sum)
-    return log_likelihood
-
+    if logp.shape.ndims == 4:
+        logp = tf.reduce_sum(logp, [1, 2, 3])
+    elif logp.shape.ndims == 2:
+        logp = tf.reduce_sum(logp, 1)
+    return logp
 
 def std_gaussian_KL_divergence(mu, log_sigma):
     """ Analytic KL-div between N(mu, e^log_sigma) and N(0, 1) """
-    return -0.5 * tf.reduce_sum(
-        1 + log_sigma - tf.square(mu) - tf.exp(log_sigma), 1)
+    sigma = tf.exp(log_sigma)
+    return -0.5 * tf.reduce_sum(1 + tf.log(tf.square(sigma)) - tf.square(mu) - tf.square(sigma), 1)
 
 class DiagonalGaussian(snt.AbstractModule):
     def __init__(self, mean, logvar):
@@ -40,5 +40,5 @@ class DiagonalGaussian(snt.AbstractModule):
         sample = mean + tf.exp(self._logvar) * noise
         return sample
 
-    # def log_prob(self, sample):
-    #     return -0.5 * (np.log(2 * np.pi) + self._logvar + (tf.square(sample - self._mean) / tf.exp(self._logvar))
+    def log_prob(self, data):
+        return diag_gaussian_log_likelihood(self._mean, self._logvar, data)

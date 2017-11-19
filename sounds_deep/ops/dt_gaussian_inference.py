@@ -81,7 +81,11 @@ class TransductiveBoxInference(snt.AbstractModule):
         """
         # broadcast mu, sigma, and bounds to
         # shape [batch_size, box_num, latent_dimension]
+        # log_sigma = tf.clip_by_value(log_sigma, -20, 20)
+        # log_sigma = tf.Print(log_sigma, [tf.reduce_min(log_sigma), tf.reduce_max(log_sigma), tf.count_nonzero(tf.clip_by_value(log_sigma - 20, -20, 20))], message="log sigma: ")
+        # log_sigma = tf.identity(log_sigma)
         sigma = tf.exp(log_sigma)
+        # sigma = tf.Print(sigma, [tf.reduce_min(sigma), tf.reduce_max(sigma)], message="sigma: ")
         mu = tf.tile(tf.expand_dims(mu, 1), [1, tf.shape(lower_bounds)[0], 1])
         sigma = tf.tile(
             tf.expand_dims(sigma, 1), [1, tf.shape(lower_bounds)[0], 1])
