@@ -8,8 +8,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 import sounds_deep.contrib.data.data as data
-import sounds_deep.contrib.models.svae
-import sounds_deep.contrib.util
+import sounds_deep.contrib.models.svae as svae
+import sounds_deep.contrib.util as util
 # import visualise_gmm
 
 parser = argparse.ArgumentParser(description='Train an SVAE model.')

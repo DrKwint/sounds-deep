@@ -29,7 +29,7 @@ def natural_to_standard(eta1, eta2, name='gauss_to_stndrd'):
 
 def log_probability_nat(x, eta1, eta2, weights=None):
     """
-    Computes log N(x|eta1, eta2)
+    Computes $\log N(x|\eta_1, \eta_2)$
     Args:
         x:
         eta1:

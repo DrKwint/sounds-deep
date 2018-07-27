@@ -12,7 +12,7 @@ import tensorflow as tf
 import scipy.misc
 
 import sounds_deep.contrib.data.data as data
-import util
+import sounds_deep.contrib.util as util
 
 tfd = tf.contrib.distributions
 tfb = tfd.bijectors

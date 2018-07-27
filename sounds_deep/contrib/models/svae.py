@@ -2,10 +2,10 @@ import sonnet as snt
 import tensorflow as tf
 import tensorflow.contrib.distributions as tfd
 
-import distributions.gaussian as gaussian
-import parameterized_distributions.gmm as gmm
-import parameterized_distributions.niw as param_niw
-import util
+import sounds_deep.contrib.distributions.gaussian as gaussian
+import sounds_deep.contrib.parameterized_distributions.gmm as gmm
+import sounds_deep.contrib.parameterized_distributions.niw as param_niw
+import sounds_deep.contrib.util
 
 
 # class weight assignments given data
