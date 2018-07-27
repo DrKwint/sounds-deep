@@ -7,7 +7,7 @@ from os import path
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
+with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
@@ -16,16 +16,16 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.1.0.dev2',
+    version='0.1.0.dev1',
 
-    description='A library for deep generative models',
+    description='A deep learning built on TensorFlow, Sonnet, and Sacred',
     long_description=long_description,
 
     # The project's main homepage.
     url='',
 
     # Author details
-    author='Paul Quint',
+    author='Eleanor Quint',
     author_email='pquint@cse.unl.edu',
 
     # Choose your license
@@ -48,11 +48,11 @@ setup(
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
 
     # What does your project relate to?
-    keywords='deep_learning machine_learning generative_models',
+    keywords='deep_learning machine_learning tensorflow',
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
@@ -66,7 +66,7 @@ setup(
     # your project is installed. For an analysis of "install_requires" vs pip's
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=[],
+    install_requires=['tensorflow-gpu'],
 
     # List additional groups of dependencies here (e.g. development
     # dependencies). You can install these using the following syntax,
@@ -74,7 +74,7 @@ setup(
     # $ pip install -e .[dev,test]
     extras_require={
         'dev': ['check-manifest'],
-        'test': ['Pillow'],
+        'test': [''],
     },
 
     # If there are data files included in your packages that need to be

@@ -1,4 +1,4 @@
-""" Dataset that stores data in RAM (VRAM?) """
+""" Dataset that stores data in VRAM """
 import math
 
 import tensorflow as tf
