@@ -29,26 +29,31 @@ train_gen = data.data_generator(train_data, args.batch_size)
 
 # build the model
 encoder_conv = snt.nets.ConvNet2D(
-    [96, 96, 96, 96, 192, 192, 192, 192], [3], [2, 1, 1, 2, 1, 1, 2, 1], [snt.SAME],
+    [96, 96, 96, 96, 192, 192, 192, 192], [3], [2, 1, 1, 2, 1, 1, 2, 1],
+    [snt.SAME],
     activation=tf.nn.elu,
     regularizers={'w': tf.contrib.layers.l2_regularizer(0.001)})
 encoder_mlp = snt.nets.MLP(
-    [args.latent_dimension * 2], regularizers={'w': tf.contrib.layers.l2_regularizer(0.001)})
-encoder_module = snt.Sequential(
-    [encoder_conv, lambda x: tf.reshape(x, [args.batch_size, -1]), encoder_mlp])
+    [args.latent_dimension * 2],
+    regularizers={'w': tf.contrib.layers.l2_regularizer(0.001)})
+encoder_module = snt.Sequential([
+    encoder_conv, lambda x: tf.reshape(x, [args.batch_size, -1]), encoder_mlp
+])
 decoder_mlp = encoder_mlp.transpose()
 decoder_conv = encoder_conv.transpose()
 decoder_module = snt.Sequential(
     [decoder_mlp, lambda x: tf.reshape(x, [-1, 4, 4, 192]), decoder_conv])
-model = svae.GMM_SVAE(args.latent_dimension, 10, encoder_module, decoder_module)
+model = svae.GMM_SVAE(args.latent_dimension, 10, encoder_module,
+                      decoder_module)
 
 # build model
 data_ph = tf.placeholder(tf.float32, shape=data_shape)
 output_distribution, latent_posterior, latent_k_samples, latent_samples, log_z_given_y_phi = model(
     data_ph, nb_samples=20)
 
-elbo, elbo_details = model.compute_elbo(data_ph, output_distribution, latent_posterior,
-                                        latent_k_samples, log_z_given_y_phi)
+elbo, elbo_details = model.compute_elbo(data_ph, output_distribution,
+                                        latent_posterior, latent_k_samples,
+                                        log_z_given_y_phi)
 optimizer = tf.train.AdamOptimizer()
 train_op = optimizer.minimize(-elbo)
 
@@ -91,13 +96,14 @@ with tf.Session(config=config) as session:
         mean_elbo = np.mean(out_dict['elbo'])
         recon_error = np.mean(out_dict['reconstruction_loss'])
         weighted_log_numerator = np.mean(out_dict['weighted_log_numerator'])
-        weighted_log_denominator = np.mean(out_dict['weighted_log_denominator'])
+        weighted_log_denominator = np.mean(
+            out_dict['weighted_log_denominator'])
         regularizer = np.mean(out_dict['regularizer_term'])
         bits_per_dim = mean_elbo / (np.log(2.) * num_pixels)
         print(
             'BITS/DIM: {:.3f}\tELBO: {:.3f}\tRecon: {:.3f}\tRegularizer: {:.3f}\tlog_numerator: {:.3f}\tlog_denominator: {:.3f}'.
-            format(bits_per_dim, mean_elbo, recon_error, regularizer, weighted_log_numerator,
-                   weighted_log_denominator))
+            format(bits_per_dim, mean_elbo, recon_error, regularizer,
+                   weighted_log_numerator, weighted_log_denominator))
         # print(out_dict['grads'])
 
         fig, ax = plt.subplots(tight_layout=True)

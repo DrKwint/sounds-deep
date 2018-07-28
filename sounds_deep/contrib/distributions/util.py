@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+
 def logdet(A, name='logdet'):
     """
     Numerically stable implementation of log(det(A)) for symmetric positive definite matrices
@@ -13,4 +14,7 @@ def logdet(A, name='logdet'):
     with tf.name_scope(name):
         # return tf.log(tf.matrix_determinant(A))
         return tf.multiply(
-            2., tf.reduce_sum(tf.log(tf.matrix_diag_part(tf.cholesky(A))), axis=-1), name='logdet')
+            2.,
+            tf.reduce_sum(
+                tf.log(tf.matrix_diag_part(tf.cholesky(A))), axis=-1),
+            name='logdet')

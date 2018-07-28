@@ -20,6 +20,7 @@ _images_per_file = 10000
 # This is used to pre-allocate arrays for efficiency.
 _num_images_train = _num_files_train * _images_per_file
 
+
 def download_and_extract_npy(data_dir):
     data_url = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
     maybe_download_and_extract(data_url, data_dir)
@@ -41,6 +42,7 @@ def _get_file_path(data_dir, filename):
     """
 
     return os.path.join(data_dir, "cifar-10-batches-py/", filename)
+
 
 def _unpickle(data_dir, filename):
     """
@@ -77,6 +79,7 @@ def _convert_images(raw):
 
     return images
 
+
 def _load_data(data_dir, filename):
     """
     Load a pickled data-file from the CIFAR-10 data-set
@@ -98,6 +101,7 @@ def _load_data(data_dir, filename):
 
     return images, cls
 
+
 def load_training_data(data_dir):
     """
     Load all the training-data for the CIFAR-10 data-set.
@@ -106,7 +110,9 @@ def load_training_data(data_dir):
     """
 
     # Pre-allocate the arrays for the images and class-numbers for efficiency.
-    images = np.zeros(shape=[_num_images_train, img_size, img_size, num_channels], dtype=float)
+    images = np.zeros(
+        shape=[_num_images_train, img_size, img_size, num_channels],
+        dtype=float)
     cls = np.zeros(shape=[_num_images_train], dtype=int)
 
     # Begin-index for the current batch.
@@ -115,7 +121,8 @@ def load_training_data(data_dir):
     # For each data-file.
     for i in range(_num_files_train):
         # Load the images and class-numbers from the data-file.
-        images_batch, cls_batch = _load_data(data_dir, filename="data_batch_" + str(i + 1))
+        images_batch, cls_batch = _load_data(
+            data_dir, filename="data_batch_" + str(i + 1))
 
         # Number of images in this batch.
         num_images = len(images_batch)
@@ -144,6 +151,7 @@ def load_test_data(data_dir):
     images, cls = _load_data(data_dir, filename="test_batch")
 
     return images, cls
+
 
 import sys
 import os
@@ -192,9 +200,8 @@ def maybe_download_and_extract(url, download_dir):
             os.makedirs(download_dir)
 
         # Download the file from the internet.
-        file_path, _ = urllib.request.urlretrieve(url=url,
-                                                  filename=file_path,
-                                                  reporthook=_print_download_progress)
+        file_path, _ = urllib.request.urlretrieve(
+            url=url, filename=file_path, reporthook=_print_download_progress)
 
         print("Download finished. Extracting files.")
 

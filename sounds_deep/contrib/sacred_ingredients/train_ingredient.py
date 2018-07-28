@@ -1,7 +1,7 @@
 import sacred
 import tensorflow as tf
 
-import util
+import sounds_deep.contrib.util
 
 train_ingredient = sacred.Ingredient('train')
 
@@ -12,13 +12,8 @@ def cfg():
 
 
 @train_ingredient.capture
-def run_training(write_update_fn,
-                 train_op,
-                 train_gen,
-                 input_ph,
-                 verbose_ops_dict,
-                 batches_per_epoch,
-                 epochs):
+def run_training(write_update_fn, train_op, train_gen, input_ph,
+                 verbose_ops_dict, batches_per_epoch, epochs):
     out_dicts = []
 
     config = tf.ConfigProto()

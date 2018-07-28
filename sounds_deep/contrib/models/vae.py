@@ -57,4 +57,5 @@ class VAE(snt.AbstractModule):
         elbo_local = -(rate + distortion)
         self.elbo = tf.reduce_mean(elbo_local)
         self.importance_weighted_elbo = tf.reduce_mean(
-            tf.reduce_logsumexp(elbo_local, axis=0) - tf.log(tf.to_float(n_samples)))
+            tf.reduce_logsumexp(elbo_local, axis=0) -
+            tf.log(tf.to_float(n_samples)))

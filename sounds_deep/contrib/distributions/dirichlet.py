@@ -9,7 +9,8 @@ def expected_log_pi(dir_standard_param):
     with tf.name_scope('dirichlet_expectation'):
         return tf.subtract(
             tf.digamma(dir_standard_param),
-            tf.digamma(tf.reduce_sum(dir_standard_param, axis=-1, keep_dims=True)),
+            tf.digamma(
+                tf.reduce_sum(dir_standard_param, axis=-1, keep_dims=True)),
             name='expected_mixing_coeffs')
 
 

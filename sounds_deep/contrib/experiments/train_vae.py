@@ -39,14 +39,13 @@ model(data_ph, n_samples=50)
 
 global_step = tf.train.get_or_create_global_step()
 learning_rate = tf.train.cosine_decay(args.learning_rate, global_step,
-                                        args.epochs * batches_per_epoch)
+                                      args.epochs * batches_per_epoch)
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
 train_op = optimizer.minimize(-model.elbo)
 
 verbose_ops_dict = dict()
 verbose_ops_dict['elbo'] = model.elbo
 verbose_ops_dict['iw_elbo'] = model.importance_weighted_elbo
-
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -65,6 +64,7 @@ with tf.Session(config=config) as session:
         mean_elbo = np.mean(out_dict['elbo'])
         mean_iw_elbo = np.mean(out_dict['iw_elbo'])
 
-        bits_per_dim = -mean_elbo / (np.log(2.) * reduce(operator.mul, data_shape[1:]))
-        print("bits per dim: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}".
-              format(bits_per_dim, mean_elbo, mean_iw_elbo))
+        bits_per_dim = -mean_elbo / (
+            np.log(2.) * reduce(operator.mul, data_shape[1:]))
+        print("bits per dim: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}".format(
+            bits_per_dim, mean_elbo, mean_iw_elbo))

@@ -27,7 +27,8 @@ def run_epoch_ops(session,
         iterable = list(range(steps_per_epoch))
 
     for step in iterable:
-        out = session.run([silent_ops, verbose_ops_dict], feed_dict=feed_dict_fn())[1]
+        out = session.run(
+            [silent_ops, verbose_ops_dict], feed_dict=feed_dict_fn())[1]
         verbose_vals = {k: v + [out[k]] for k, v in verbose_vals.items()}
 
     return {
@@ -49,20 +50,26 @@ def logdet(A, name='logdet'):
     with tf.name_scope(name):
         # return tf.log(tf.matrix_determinant(A))
         return tf.multiply(
-            2., tf.reduce_sum(tf.log(tf.matrix_diag_part(tf.cholesky(A))), axis=-1), name='logdet')
+            2.,
+            tf.reduce_sum(
+                tf.log(tf.matrix_diag_part(tf.cholesky(A))), axis=-1),
+            name='logdet')
 
 
 def matrix_is_pos_def_op(A):
-    eigvals = tf.self_adjoint_eig(tf.divide(A + tf.matrix_transpose(A), 2., name='symmetrised'))[0]
-    return tf.assert_positive(eigvals, message='Matrix is not positive definite')
+    eigvals = tf.self_adjoint_eig(
+        tf.divide(A + tf.matrix_transpose(A), 2., name='symmetrised'))[0]
+    return tf.assert_positive(
+        eigvals, message='Matrix is not positive definite')
 
 
 def positive_definate_initializer(shape, dtype=tf.float32):
     rows, cols = shape[-2:]
     vals = tf.random_normal(shape, mean=0.0, stddev=0.01, dtype=dtype)
-    vals += tf.transpose(vals, perm=[0,2,1])
+    vals += tf.transpose(vals, perm=[0, 2, 1])
     eye = tf.eye(rows, cols, dtype=dtype)
     return vals + eye
+
 
 def int_shape(x):
     if str(x.get_shape()[0]) != '?':
@@ -74,10 +81,15 @@ def reverse_features(name, h, reverse=False):
     return h[:, :, :, ::-1]
 
 
-def shuffle_features(name, h, indices=None, return_indices=False, reverse=False):
+def shuffle_features(name,
+                     h,
+                     indices=None,
+                     return_indices=False,
+                     reverse=False):
     with tf.variable_scope(name):
 
-        rng = np.random.RandomState((abs(hash(tf.get_variable_scope().name))) % 10000000)
+        rng = np.random.RandomState(
+            (abs(hash(tf.get_variable_scope().name))) % 10000000)
 
         if indices == None:
             # Create numpy and tensorflow variables with indices

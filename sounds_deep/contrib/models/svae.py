@@ -34,31 +34,37 @@ def compute_log_z_given_y(eta1_phi1,
 
         # combine eta2_phi1 and eta2_phi2
         eta2_phi_tilde = tf.add(
-            tf.expand_dims(eta2_phi1, axis=1), tf.expand_dims(eta2_phi2, axis=0))
+            tf.expand_dims(eta2_phi1, axis=1), tf.expand_dims(
+                eta2_phi2, axis=0))
 
         # w_eta2 = -0.5 * inv(sigma_phi1 + sigma_phi2)
         solved = tf.matrix_solve(eta2_phi_tilde,
-                                 tf.tile(tf.expand_dims(eta2_phi2, axis=0), [N, 1, 1, 1]))
+                                 tf.tile(
+                                     tf.expand_dims(eta2_phi2, axis=0),
+                                     [N, 1, 1, 1]))
         w_eta2 = tf.einsum('nju,nkui->nkij', eta2_phi1, solved)
 
         # for nummerical stability...
-        w_eta2 = tf.divide(w_eta2 + tf.matrix_transpose(w_eta2), 2., name='symmetrised')
+        w_eta2 = tf.divide(
+            w_eta2 + tf.matrix_transpose(w_eta2), 2., name='symmetrised')
 
         # w_eta1 = inv(sigma_phi1 + sigma_phi2) * mu_phi2
         w_eta1 = tf.einsum(
             'nuj,nkuv->nkj',
             eta2_phi1,
-            tf.matrix_solve(eta2_phi_tilde,
-                            tf.tile(
-                                tf.expand_dims(tf.expand_dims(eta1_phi2, axis=0), axis=-1),
-                                [N, 1, 1, 1]))  # shape inside solve= N, K, D, 1
+            tf.matrix_solve(
+                eta2_phi_tilde,
+                tf.tile(
+                    tf.expand_dims(tf.expand_dims(eta1_phi2, axis=0), axis=-1),
+                    [N, 1, 1, 1]))  # shape inside solve= N, K, D, 1
         )  # w_eta1.shape = N, K, D
 
         # compute means
         mu_phi1, _ = gaussian.natural_to_standard(eta1_phi1, eta2_phi1)
 
         # compute log_z_given_y_phi
-        return gaussian.log_probability_nat(mu_phi1, w_eta1, w_eta2, pi_phi2)  #, (w_eta1, w_eta2)
+        return gaussian.log_probability_nat(mu_phi1, w_eta1, w_eta2,
+                                            pi_phi2)  #, (w_eta1, w_eta2)
 
 
 def subsample_x(x_k_samples, log_q_z_given_y, seed=0):
@@ -78,9 +84,13 @@ def subsample_x(x_k_samples, log_q_z_given_y, seed=0):
         # prepare indices for N and S dimension
         # tf can't tile int32 tensors on the GPU. Therefore, tile it as float and convert to int afterwards
         n_idx = tf.to_int32(
-            tf.tile(tf.reshape(tf.range(N, dtype=tf.float32), (-1, 1)), multiples=[1, S]))
+            tf.tile(
+                tf.reshape(tf.range(N, dtype=tf.float32), (-1, 1)),
+                multiples=[1, S]))
         s_idx = tf.to_int32(
-            tf.tile(tf.reshape(tf.range(S, dtype=tf.float32), (1, -1)), multiples=[N, 1]))
+            tf.tile(
+                tf.reshape(tf.range(S, dtype=tf.float32), (1, -1)),
+                multiples=[N, 1]))
 
         # sample S times z ~ q(z|y, phi) for each N.
         z_samps = tf.multinomial(
@@ -89,16 +99,23 @@ def subsample_x(x_k_samples, log_q_z_given_y, seed=0):
 
         # tensor of shape (N, S, 3), containing indices of all chosen samples
         choices = tf.concat(
-            [tf.expand_dims(n_idx, 2),
-             tf.expand_dims(z_samps, 2),
-             tf.expand_dims(s_idx, 2)],
+            [
+                tf.expand_dims(n_idx, 2),
+                tf.expand_dims(z_samps, 2),
+                tf.expand_dims(s_idx, 2)
+            ],
             axis=2)
 
         return tf.gather_nd(x_k_samples, choices, name='x_samples')
 
 
 class GMM_SVAE(snt.AbstractModule):
-    def __init__(self, latent_dimension, nb_components, encoder, decoder, name='gmm_svae'):
+    def __init__(self,
+                 latent_dimension,
+                 nb_components,
+                 encoder,
+                 decoder,
+                 name='gmm_svae'):
         super(GMM_SVAE, self).__init__(name=name)
         self._latent_dimension = latent_dimension
         self._nb_components = nb_components
@@ -107,10 +124,12 @@ class GMM_SVAE(snt.AbstractModule):
 
         with self._enter_variable_scope():
             self._mu_net = snt.Sequential(
-                [tf.layers.Flatten(), snt.Linear(self._latent_dimension)])
-            self._sigma_net = snt.Sequential(
                 [tf.layers.Flatten(),
-                 snt.Linear(self._latent_dimension), tf.nn.softplus])
+                 snt.Linear(self._latent_dimension)])
+            self._sigma_net = snt.Sequential([
+                tf.layers.Flatten(),
+                snt.Linear(self._latent_dimension), tf.nn.softplus
+            ])
 
             self._theta_prior = param_niw.NormalInverseWishart(
                 nb_components,
@@ -130,9 +149,17 @@ class GMM_SVAE(snt.AbstractModule):
                 v_init=latent_dimension + 1)
             _, exp_mu, exp_cov = self._theta.expected_values()
             self.phi_gmm = gmm.GMM(
-                nb_components, latent_dimension, mu_init=exp_mu, cov_init=exp_cov, trainable=True)
+                nb_components,
+                latent_dimension,
+                mu_init=exp_mu,
+                cov_init=exp_cov,
+                trainable=True)
 
-    def _build(self, inputs, nb_samples=10, seed=0, encoder_param_type='natural'):
+    def _build(self,
+               inputs,
+               nb_samples=10,
+               seed=0,
+               encoder_param_type='natural'):
         ### vae encode
         emb = self._encoder(inputs)
         enc_eta1 = self._mu_net(emb)
@@ -148,9 +175,14 @@ class GMM_SVAE(snt.AbstractModule):
         ### combined GMM and VAE latent parameters
         # eta1_tilde.shape = (N, K, D); eta2_tsilde.shape = (N, K, D, D)
         # with tf.control_dependencies([util.matrix_is_pos_def_op(-2 * enc_eta2)]):
-        eta1_tilde = tf.expand_dims(enc_eta1, axis=1) + tf.expand_dims(gmm_eta1, axis=0)
-        eta2_tilde = tf.expand_dims(enc_eta2, axis=1) + tf.expand_dims(gmm_eta2, axis=0)
-        log_z_given_y_phi = compute_log_z_given_y(enc_eta1, enc_eta2, gmm_eta1, gmm_eta2, gmm_pi)
+        eta1_tilde = tf.expand_dims(
+            enc_eta1, axis=1) + tf.expand_dims(
+                gmm_eta1, axis=0)
+        eta2_tilde = tf.expand_dims(
+            enc_eta2, axis=1) + tf.expand_dims(
+                gmm_eta2, axis=0)
+        log_z_given_y_phi = compute_log_z_given_y(enc_eta1, enc_eta2, gmm_eta1,
+                                                  gmm_eta2, gmm_pi)
         # with tf.control_dependencies([util.matrix_is_pos_def_op(-2 * gmm_eta2)]):
         mu, cov = gaussian.natural_to_standard(eta1_tilde, eta2_tilde)
         posterior_mixture_distribution = tfd.MixtureSameFamily(
@@ -177,12 +209,14 @@ class GMM_SVAE(snt.AbstractModule):
 
         # subsample for each datum in minibatch (go from `nb_samples` per component to `nb_samples` total)
         latent_samples = subsample_x(
-            tf.transpose(latent_k_samples, [1, 0, 2, 3]), log_z_given_y_phi, seed)
+            tf.transpose(latent_k_samples, [1, 0, 2, 3]), log_z_given_y_phi,
+            seed)
 
         return output_distribution, posterior_mixture_distribution, latent_k_samples, latent_samples, log_z_given_y_phi
 
-    def compute_elbo(self, data, output_distribution, posterior_mixture_distribution,
-                     latent_k_samples, log_z_given_y_phi):
+    def compute_elbo(self, data, output_distribution,
+                     posterior_mixture_distribution, latent_k_samples,
+                     log_z_given_y_phi):
         nb_samples = output_distribution.batch_shape[0]
         r_nk = tf.exp(log_z_given_y_phi)
 
@@ -192,7 +226,8 @@ class GMM_SVAE(snt.AbstractModule):
                 tf.expand_dims(tf.expand_dims(data, axis=1), axis=0),
                 [nb_samples, 1, self._nb_components, 1, 1, 1])
             neg_reconstruction_error = tf.reduce_mean(
-                tf.reduce_sum(output_distribution.log_prob(shaped_data) * r_nk, axis=2))
+                tf.reduce_sum(
+                    output_distribution.log_prob(shaped_data) * r_nk, axis=2))
 
         # compute E[log q_phi(x,z=k|y)]
         with tf.name_scope('compute_regularizer'):
@@ -210,9 +245,11 @@ class GMM_SVAE(snt.AbstractModule):
                     mu = tf.stop_gradient(mu)
                     sigma = tf.stop_gradient(sigma)
                     log_pi = tf.stop_gradient(log_pi)
-                    theta_gaussian_dist = tfd.MultivariateNormalFullCovariance(mu, sigma)
+                    theta_gaussian_dist = tfd.MultivariateNormalFullCovariance(
+                        mu, sigma)
 
-                log_N_x_given_theta = theta_gaussian_dist.log_prob(latent_k_samples)
+                log_N_x_given_theta = theta_gaussian_dist.log_prob(
+                    latent_k_samples)
                 log_denominator = log_N_x_given_theta + log_pi
 
             # log_denominator = tf.Print(log_denominator, [latent_k_samples, mu, sigma])
@@ -226,12 +263,16 @@ class GMM_SVAE(snt.AbstractModule):
 
         details = (neg_reconstruction_error,
                    tf.reduce_mean(
-                       tf.reduce_sum(tf.multiply(r_nk, log_numerator), axis=-1), axis=0),
+                       tf.reduce_sum(
+                           tf.multiply(r_nk, log_numerator), axis=-1),
+                       axis=0),
                    tf.reduce_mean(
-                       tf.reduce_sum(tf.multiply(r_nk, log_denominator), axis=-1), axis=0),
-                   regularizer_term)
+                       tf.reduce_sum(
+                           tf.multiply(r_nk, log_denominator), axis=-1),
+                       axis=0), regularizer_term)
 
         return elbo, details
 
     def m_step_op(self, latent_posterior_samples, r_nk, step_size):
-        return self._theta.m_step_op(self._theta_prior, latent_posterior_samples, r_nk, step_size)
+        return self._theta.m_step_op(self._theta_prior,
+                                     latent_posterior_samples, r_nk, step_size)

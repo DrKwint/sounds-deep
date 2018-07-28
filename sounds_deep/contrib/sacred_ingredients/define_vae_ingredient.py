@@ -3,8 +3,8 @@ import sacred
 import sonnet as snt
 import tensorflow as tf
 
-import data.data as data
-import vae
+import sounds_deep.contrib.data.data as data
+import sounds_deep.contrib.models.vae as vae
 
 define_vae_ingredient = sacred.Ingredient('model')
 
@@ -13,11 +13,13 @@ define_vae_ingredient = sacred.Ingredient('model')
 def cfg():
     latent_dimension = 50
 
+
 @define_vae_ingredient.capture
 def write_verbose_ops(epoch, result_dict, _run):
     result_dict['elbo'] = float(np.mean(result_dict['elbo']))
     result_dict['iw_elbo'] = float(np.mean(result_dict['iw_elbo']))
     _run.info[epoch] = result_dict
+
 
 @define_vae_ingredient.capture
 def define_model(data_shape, latent_dimension):

@@ -45,10 +45,10 @@ for i in range(num_bijectors):
 flow_bijector = tfb.Chain(list(reversed(bijectors)))
 model = tfd.TransformedDistribution(
     # distribution=tfd.MultivariateNormalDiag(loc=tf.zeros([args.batch_size, 784])),
-    distribution=tfd.Dirichlet(10*tf.ones([args.batch_size, 81, 9])),
+    distribution=tfd.Dirichlet(10 * tf.ones([args.batch_size, 81, 9])),
     bijector=tfb.MaskedAutoregressiveFlow(
-            shift_and_log_scale_fn=tfb.masked_autoregressive_default_template(
-                hidden_layers=[512, 512])))
+        shift_and_log_scale_fn=tfb.masked_autoregressive_default_template(
+            hidden_layers=[512, 512])))
 
 # build model
 data_ph = tf.placeholder(tf.float32, shape=[args.batch_size, 81, 9])
@@ -80,8 +80,10 @@ with tf.Session(config=config) as session:
 
         mean_nll = np.mean(out_dict['nll'])
 
-        bits_per_dim = -mean_nll / (np.log(2.) * reduce(operator.mul, data_shape[1:]))
-        print("bits per dim: {:7.5f}\tnll: {:7.5f}".format(bits_per_dim, mean_nll))
+        bits_per_dim = -mean_nll / (
+            np.log(2.) * reduce(operator.mul, data_shape[1:]))
+        print("bits per dim: {:7.5f}\tnll: {:7.5f}".format(
+            bits_per_dim, mean_nll))
 
         #generated_img = session.run(sample_img)
         #for i in range(generated_img.shape[0]):

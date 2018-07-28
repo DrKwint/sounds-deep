@@ -4,9 +4,9 @@ import sonnet as snt
 import tensorflow as tf
 
 import sounds_deep.contrib.data.data as data
-import vae
-import parameterized_distributions.gmm
-import util
+import sounds_deep.contrib.models.vae
+import sounds_deep.contrib.parameterized_distributions.gmm
+import sounds_deep.contrib.util
 
 define_gmm_vae_ingredient = sacred.Ingredient('model')
 
@@ -30,14 +30,20 @@ def define_model(data_shape, latent_dimension):
     decoder_module = snt.nets.MLP([200, 200, 784])
 
     def prior_fn(latent_dimension):
-        cov_init = util.positive_definate_initializer([10] + [latent_dimension] * 2)
-        eigvals = tf.self_adjoint_eig(tf.divide(cov_init + tf.matrix_transpose(cov_init), 2., name='symmetrised'))[0]
+        cov_init = util.positive_definate_initializer(
+            [10] + [latent_dimension] * 2)
+        eigvals = tf.self_adjoint_eig(
+            tf.divide(
+                cov_init + tf.matrix_transpose(cov_init),
+                2.,
+                name='symmetrised'))[0]
         cov_init = tf.Print(cov_init, [cov_init])
 
         return parameterized_distributions.gmm.GMM(
             10, latent_dimension, cov_init=cov_init, trainable=True).model
 
-    model = vae.VAE(latent_dimension, encoder_module, decoder_module, prior_fn=prior_fn)
+    model = vae.VAE(
+        latent_dimension, encoder_module, decoder_module, prior_fn=prior_fn)
 
     # assemble graph
     input_ph = tf.placeholder(tf.float32, shape=data_shape)

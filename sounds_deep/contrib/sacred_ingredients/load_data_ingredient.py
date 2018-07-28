@@ -1,14 +1,14 @@
 import sacred
-import sys
-sys.path.append('.')
-import data.data as data
+import sounds_deep.contrib.data.data as data
 
 load_data_ingredient = sacred.Ingredient('dataset')
+
 
 @load_data_ingredient.config
 def cfg():
     dataset_name = 'mnist'
     batch_size = 32
+
 
 @load_data_ingredient.capture
 def load_data(dataset_name, batch_size):
