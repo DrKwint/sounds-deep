@@ -9,6 +9,7 @@ Subpackages
     sounds_deep.contrib.data
     sounds_deep.contrib.distributions
     sounds_deep.contrib.experiments
+    sounds_deep.contrib.parameterized_distributions
     sounds_deep.contrib.sacred_ingredients
 
 Submodules
