@@ -7,15 +7,16 @@ load_data_ingredient = sacred.Ingredient('dataset')
 @load_data_ingredient.config
 def cfg():
     dataset_name = 'mnist'
+    data_path = './data/'
     batch_size = 32
 
 
 @load_data_ingredient.capture
-def load_data(dataset_name, batch_size):
+def load_data(dataset_name, data_path, batch_size):
     if dataset_name == 'mnist':
-        train_data, _, test_data, _ = data.load_mnist('./data/')
+        train_data, _, test_data, _ = data.load_mnist(data_path)
     elif dataset_name == 'cifar10':
-        train_data, _, test_data, _ = data.load_cifar10('./data/')
+        train_data, _, test_data, _ = data.load_cifar10(data_path)
     else:
         assert False, "Must specify a valid dataset_name"
     data_shape = (batch_size, ) + train_data.shape[1:]

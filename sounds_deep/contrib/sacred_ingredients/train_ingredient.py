@@ -1,7 +1,7 @@
 import sacred
 import tensorflow as tf
 
-import sounds_deep.contrib.util
+import sounds_deep.contrib.util as util
 
 train_ingredient = sacred.Ingredient('train')
 
