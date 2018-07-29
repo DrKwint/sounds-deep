@@ -1,11 +1,12 @@
+"""
+Imports for each dataset are in the respective function so downstream consumers
+don't have to install the dependencies for all of them.
+"""
 import os
 
 import numpy as np
 from tqdm import tqdm
 
-import sounds_deep.contrib.data.mnist as mnist
-import sounds_deep.contrib.data.celeba as celeba
-import sounds_deep.contrib.data.cifar10 as cifar10
 import sounds_deep.contrib.data.util as util
 
 
@@ -47,12 +48,14 @@ def parallel_data_generator(arrays, batch_size):
 
 
 def load_mnist(data_dir):
+    import sounds_deep.contrib.data.mnist as mnist
     (train_data, train_labels), (test_data, test_labels) = mnist.load_mnist(
         data_dir, normalize=True, flatten=True, one_hot_label=True)
     return train_data, train_labels, test_data, test_labels
 
 
 def load_cifar10(data_dir):
+    import sounds_deep.contrib.data.cifar10 as cifar10
     """Returns CIFAR10 as (train_data, train_labels, test_data, test_labels
     
     Shapes are (50000, 32, 32, 3), (50000, 10), (10000, 32, 32, 3), (10000, 10)
@@ -73,6 +76,7 @@ def load_cifar10(data_dir):
 
 
 def load_celeba(data_dir):
+    import sounds_deep.contrib.data.celeba as celeba
     idxable = celeba.CelebA(data_dir)
     # train_idxs, val_idxs, test_idxs, attribute_names, attributes
     return idxable, idxable.train_idxs, idxable.test_idxs, idxable.attributes

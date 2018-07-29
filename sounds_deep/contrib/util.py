@@ -11,14 +11,14 @@ def run_epoch_ops(session,
                   verbose=False):
     """
     Args:
-        - session: tf.Session
-        - steps_per_epoch: (int)
-        - verbose_ops: ({str: tf.Tensor})
-        - feed_dict_fn (callable): called to retrieve the feed_dict
+        session (tf.Session): Session containing the operations passed in `verbose_ops_dict` and `silent_ops`
+        steps_per_epoch (int): number of times to run operations
+        verbose_ops_dict (dict): strings to tf operations whose values will be returned
+        feed_dict_fn (callable): called to retrieve the feed_dict
                                    (dict of placeholders to np arrays)
-        - verbose (bool): whether to use tqdm progressbar on stdout
+        verbose (bool): whether to use tqdm progressbar on stdout
     Return:
-        Dict of str to numpy arrays or floats
+        dict of str to numpy arrays or floats
     """
     verbose_vals = {k: [] for k, v in verbose_ops_dict.items()}
     if verbose:
@@ -40,9 +40,11 @@ def run_epoch_ops(session,
 def logdet(A, name='logdet'):
     """
     Numerically stable implementation of log(det(A)) for symmetric positive definite matrices
+
     Source: https://github.com/tensorflow/tensorflow/issues/367#issuecomment-176857495
+
     Args:
-        A: positive definite matrix of shape ..., D, D
+        A: positive definite matrix of shape [..., D, D]
         name: tf name scope
     Returns:
         log(det(A))
@@ -75,10 +77,6 @@ def int_shape(x):
     if str(x.get_shape()[0]) != '?':
         return list(map(int, x.get_shape()))
     return [-1] + list(map(int, x.get_shape()[1:]))
-
-
-def reverse_features(name, h, reverse=False):
-    return h[:, :, :, ::-1]
 
 
 def shuffle_features(name,
