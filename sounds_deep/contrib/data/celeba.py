@@ -5,6 +5,7 @@ import os
 import sys
 import tarfile
 import urllib
+import urllib.request
 import zipfile
 from subprocess import Popen
 from contextlib import contextmanager
