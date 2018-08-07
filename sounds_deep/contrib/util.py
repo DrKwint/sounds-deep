@@ -29,7 +29,7 @@ def run_epoch_ops(session,
     for step in iterable:
         out = session.run(
             [silent_ops, verbose_ops_dict], feed_dict=feed_dict_fn())[1]
-        verbose_vals = {k: v + [out[k]] for k, v in verbose_vals.items()}
+        verbose_vals = {k: v + [np.array(out[k])] for k, v in verbose_vals.items()}
 
     return {
         k: np.concatenate(v) if v[0].shape != () else np.array(v)

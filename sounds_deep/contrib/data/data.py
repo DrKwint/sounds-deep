@@ -76,6 +76,10 @@ def load_cifar10(data_dir):
 
 
 def load_celeba(data_dir):
+    """
+    Returns:
+      4-tuple of an indexable of images, train indices, test indices, and attributes
+    """
     import sounds_deep.contrib.data.celeba as celeba
     idxable = celeba.CelebA(data_dir)
     # train_idxs, val_idxs, test_idxs, attribute_names, attributes
