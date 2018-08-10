@@ -65,11 +65,11 @@ def load_cifar10(data_dir):
         cifar10.download_and_extract_npy(data_dir)
 
     train_data = np.load(os.path.join(
-        data_dir, 'cifar10_train_data.npy')).astype('float32') / 255.0
+        data_dir, 'cifar10_train_data.npy')).astype('float32')
     train_labels = np.load(os.path.join(data_dir, 'cifar10_train_labels.npy'))
     train_labels = util.one_hot(train_labels, 10)
     test_data = np.load(os.path.join(
-        data_dir, 'cifar10_test_data.npy')).astype('float32') / 255.0
+        data_dir, 'cifar10_test_data.npy')).astype('float32')
     test_labels = np.load(os.path.join(data_dir, 'cifar10_test_labels.npy'))
     test_labels = util.one_hot(test_labels, 10)
     return train_data, train_labels, test_data, test_labels

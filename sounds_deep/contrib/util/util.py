@@ -36,7 +36,6 @@ def run_epoch_ops(session,
         for k, v in verbose_vals.items()
     }
 
-
 def logdet(A, name='logdet'):
     """
     Numerically stable implementation of log(det(A)) for symmetric positive definite matrices
@@ -56,7 +55,6 @@ def logdet(A, name='logdet'):
             tf.reduce_sum(
                 tf.log(tf.matrix_diag_part(tf.cholesky(A))), axis=-1),
             name='logdet')
-
 
 def matrix_is_pos_def_op(A):
     eigvals = tf.self_adjoint_eig(

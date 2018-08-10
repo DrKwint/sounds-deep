@@ -1,21 +1,50 @@
 import tensorflow as tf
 import sonnet as snt
-import tensorflow.contrib.distributions as tfd
+
+import functools
+
+tfd = tf.contrib.distributions
+tfb = tfd.bijectors
 
 STD_GAUSSIAN_FN = lambda latent_dimension: tfd.MultivariateNormalDiag(
     loc=tf.zeros(latent_dimension), scale_diag=tf.ones(latent_dimension))
+IAF_PRIOR_FN = lambda latent_dimension: tfd.TransformedDistribution(
+    distribution=tfd.Normal(loc=0., scale=1.),
+    bijector=tfb.Invert(tfb.MaskedAutoregressiveFlow(
+        shift_and_log_scale_fn=tfb.masked_autoregressive_default_template(
+            hidden_layers=[512, 512])),
+        batch_shape=latent_dimension),
+    event_shape=[latent_dimension])
+IAF_POSTERIOR_FN = lambda loc, scale: tfd.TransformedDistribution(
+    distribution=tfd.MultivariateNormalDiag(loc=loc, scale_diag=scale),
+    bijector=tfb.Invert(tfb.MaskedAutoregressiveFlow(
+        shift_and_log_scale_fn=tfb.masked_autoregressive_default_template(
+            hidden_layers=[512, 512]))))
 SOFTPLUS_GAUSSIAN_FN = lambda loc, scale: tfd.MultivariateNormalDiagWithSoftplusScale(
             loc=loc, scale_diag=scale)
-BERNOULLI_FN = lambda logits: tfd.Independent(tfd.Bernoulli(logits=logits), reinterpreted_batch_ndims=3)
+BERNOULLI_FN = lambda loc, scale: tfd.Bernoulli(logits=loc)
+LOGISTIC_FN = lambda loc, scale: tfd.Logistic(loc=loc, scale=scale)
+def discretized_logistic(mean, logscale, binsize=1 / 256.0, sample=None):
+    scale = tf.exp(logscale)
+    sample = (tf.floor(sample / binsize) * binsize - mean) / scale
+    logp = tf.log(tf.sigmoid(sample + binsize / scale) - tf.sigmoid(sample) + 1e-7)
+    return tf.reduce_sum(logp, [2, 3, 4])
+
+DISCRETIZED_LOGISTIC_FN = lambda loc, scale: functools.partial(discretized_logistic, mean=loc, scale=scale)
 
 
 class VAE(snt.AbstractModule):
     """Variational Autoencoder (VAE) as first introduced by Kingma and Welling (2014)
 
+    Note: Make sure learning rate is inversely correlated with data size. If you're getting
+    myserious crashes, try an order of magnitude smaller.
+
     Attributes:
         latent_prior (tfd.Distribution): Prior latent distribution.
         latent_posterior (tfd Distribution): Posterior latent distribution.
         output_distribution (tfd Distribution): VAE output distribution.
+        distortion (Tensor): Also called reconstruction error.
+        rate (Tensor): Also called latent loss.
         elbo (Tensor): Evidence Lower Bound. Minimize to train a VAE.
         importance_weighted_elbo (Tensor): importance weighted ELBO. Minimize to train an IWAE.
     """
@@ -48,7 +77,8 @@ class VAE(snt.AbstractModule):
                 ])
                 decoder_module = snt.Sequential([
                     snt.Linear(49), lambda x: tf.reshape(x, [-1, 7, 7, 1]),
-                    snt.nets.ConvNet2DTranspose([32, 16, 1], [(14, 14), (28,28), (28,28)], [3], [2, 2, 1], [snt.SAME])
+                    snt.nets.ConvNet2DTranspose([32, 16, 1], [(14, 14), (28,28), (28,28)],
+                                                [3], [2, 2, 1], [snt.SAME])
                 ])
                 model = vae.VAE(
                     latent_dimension,
@@ -62,7 +92,7 @@ class VAE(snt.AbstractModule):
             decoder_net (Tensor -> Tensor): Decoder mapping from a rank 2 input to rank 4 output.
             prior_fn (int -> tfd.Distribution): Callable which takes an integral dimension size.
             posterior_fn (Tensor -> Tensor -> tfd.Distribution): Callable which takes location and scale and returns a tfd distribution.
-            output_dist_fn (Tensor -> tfd.Distribution): Callable from logits to a tfd distribution.
+            output_dist_fn (Tensor -> Tensor -> (Tensor -> Tensor)): Callable from loc, scale to a log-likelihood callable that takes data.
         """
         super(VAE, self).__init__(name=name)
         self._encoder = encoder_net
@@ -74,6 +104,8 @@ class VAE(snt.AbstractModule):
             self._loc = snt.Linear(latent_dimension)
             self._scale = snt.Linear(latent_dimension)
             self.latent_prior = prior_fn(latent_dimension)
+            self._log_scale = tf.get_variable(
+                "log_scale", dtype=tf.float32, initializer=tf.constant(0.0))
 
     def _build(self, inputs, n_samples=1, analytic_kl=True):
         """Builds VAE (or IWAE depending on arguments).
@@ -85,27 +117,45 @@ class VAE(snt.AbstractModule):
         Returns:
             Tensor: result of encoding, sampling, and decoding inputs in [0,1]
         """
-        x = 2 * (inputs - 0.5)
+        x = inputs
         encoder_repr = self._encoder(x)
         self.latent_posterior = self._latent_posterior_fn(
             self._loc(encoder_repr), self._scale(encoder_repr))
+        print("PRIOR: " + str(self.latent_prior))
+        print("POSTERIOR: " + str(self.latent_posterior))
         latent_posterior_sample = self.latent_posterior.sample(n_samples)
         sample_decoder = snt.BatchApply(self._decoder)
         output = sample_decoder(latent_posterior_sample)
-        self.output_distribution = self._output_dist_fn(output)
+        # self.output_distribution = tfd.Independent(
+        #     self._output_dist_fn(output, tf.exp(self._log_scale)),
+        #     reinterpreted_batch_ndims=3)
+        # print("OUTPUT: " + str(self.output_distribution))
 
-        distortion = -self.output_distribution.log_prob(inputs)
-        if analytic_kl:
+        distortion = -discretized_logistic(sample=x, mean=output, logscale=self._log_scale)
+        # distortion = -self.output_distribution.log_prob(x)
+        # distortion = tf.Print(distortion, [distortion], "distortion: ")
+        if analytic_kl and n_samples == 1:
             rate = tfd.kl_divergence(self.latent_posterior, self.latent_prior)
         else:
             rate = (self.latent_posterior.log_prob(latent_posterior_sample) -
                     self.latent_prior.log_prob(latent_posterior_sample))
-        elbo_local = -(rate + distortion)
-        self.elbo = tf.reduce_mean(elbo_local)
+        # rate = tf.Print(rate, [rate], "rate: ")
+        with tf.control_dependencies(
+            [tf.assert_positive(rate),
+             tf.assert_positive(distortion)]):
+            elbo_local = -(rate + distortion)
+
+        self.distortion = distortion
+        self.rate = rate
+        self.prior_logp = self.latent_prior.log_prob(latent_posterior_sample)
+        self.posterior_logp = self.latent_posterior.log_prob(
+            latent_posterior_sample)
+        self.elbo = tf.reduce_mean(tf.reduce_logsumexp(elbo_local, axis=0))
+        # self.elbo = tf.Print(self.elbo, [self.elbo], "elbo: ")
         self.importance_weighted_elbo = tf.reduce_mean(
             tf.reduce_logsumexp(elbo_local, axis=0) -
             tf.log(tf.to_float(n_samples)))
-        return (output / 2) + 0.5
+        return output
 
     def sample(self, sample_shape=(), seed=None, name='sample'):
         """Generate samples of the specified shape.
@@ -120,10 +170,11 @@ class VAE(snt.AbstractModule):
         Returns:
             Tensor: a sample with prepended dimensions sample_shape.
         """
-        if len(sample_shape) < 1:
-            sample_shape = [1]
+        assert self.is_connected, 'Must call `build` before this function'
+        if sample_shape == (): sample_shape = 1
         with self._enter_variable_scope():
-            with tf.variable_scope(name):
-                prior_sample = self.latent_prior.sample(
-                    sample_shape, seed, 'prior_sample')
-                return self._decoder(prior_sample)
+            # with tf.variable_scope(name):
+            prior_sample = self.latent_prior.sample(sample_shape, seed,
+                                                    'prior_sample')
+            output = self._decoder(prior_sample)
+            return self._output_dist_fn(output, tf.exp(self._log_scale)).mean()
