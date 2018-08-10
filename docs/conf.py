@@ -169,3 +169,12 @@ texinfo_documents = [
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
+
+# Manual Additions
+def skip(app, what, name, obj, skip, options):
+    if name == "__init__" or name == "_build":
+        return False
+    return skip
+
+def setup(app):
+    app.connect("autodoc-skip-member", skip)
