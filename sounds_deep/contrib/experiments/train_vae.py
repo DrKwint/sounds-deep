@@ -40,24 +40,19 @@ if args.dataset == 'cifar10':
     encoder_module = snt.Sequential([
         snt.Conv2D(16, 3),
         snt.Residual(snt.Conv2D(16, 3)),
-        snt.Residual(snt.Conv2D(16, 3)),
-        scaling.squeeze2d,
+        snt.Residual(snt.Conv2D(16, 3)), scaling.squeeze2d,
         snt.Conv2D(64, 3),
         snt.Residual(snt.Conv2D(64, 3)),
-        snt.Residual(snt.Conv2D(64, 3)),
-        scaling.squeeze2d,
+        snt.Residual(snt.Conv2D(64, 3)), scaling.squeeze2d,
         snt.Conv2D(64, 3),
         snt.Residual(snt.Conv2D(64, 3)),
-        snt.Residual(snt.Conv2D(64, 3)),
-        scaling.squeeze2d,
+        snt.Residual(snt.Conv2D(64, 3)), scaling.squeeze2d,
         snt.Conv2D(128, 3),
         snt.Residual(snt.Conv2D(128, 3)),
-        snt.Residual(snt.Conv2D(128, 3)),
-        scaling.squeeze2d,
+        snt.Residual(snt.Conv2D(128, 3)), scaling.squeeze2d,
         snt.Conv2D(256, 3),
         snt.Residual(snt.Conv2D(256, 3)),
-        snt.Residual(snt.Conv2D(256, 3)),
-        scaling.squeeze2d,
+        snt.Residual(snt.Conv2D(256, 3)), scaling.squeeze2d,
         tf.keras.layers.Flatten(),
         snt.Linear(100)
     ])
@@ -65,38 +60,23 @@ if args.dataset == 'cifar10':
         lambda x: tf.reshape(x, [-1, 4, 4, 4]),
         snt.Conv2D(32, 3),
         snt.Residual(snt.Conv2D(32, 3)),
-        snt.Residual(snt.Conv2D(32, 3)),
+        snt.Residual(snt.Conv2D(32, 3))
+    ] + [
         scaling.unsqueeze2d,
         snt.Conv2D(32, 3),
         snt.Residual(snt.Conv2D(32, 3)),
-        snt.Residual(snt.Conv2D(32, 3)),
-        scaling.unsqueeze2d,
-        snt.Conv2D(32, 3),
-        snt.Residual(snt.Conv2D(32, 3)),
-        snt.Residual(snt.Conv2D(32, 3)),
-        scaling.unsqueeze2d,
-        snt.Conv2D(32, 3),
-        snt.Residual(snt.Conv2D(32, 3)),
-        snt.Residual(snt.Conv2D(32, 3)),
-        scaling.unsqueeze2d,
-        snt.Conv2D(32, 3),
-        snt.Residual(snt.Conv2D(32, 3)),
-        snt.Residual(snt.Conv2D(32, 3)),
-        scaling.unsqueeze2d,
-        snt.Conv2D(32, 3),
-        snt.Residual(snt.Conv2D(32, 3)),
-        snt.Residual(snt.Conv2D(32, 3)),
-        snt.Conv2D(3, 3)
-    ])
+        snt.Residual(snt.Conv2D(32, 3))
+    ] * 5)
     output_distribution_fn = discretized_logistic.DiscretizedLogistic
 elif args.dataset == 'mnist':
     encoder_module = snt.Sequential(
         [tf.keras.layers.Flatten(),
-        snt.nets.MLP([200, 200])])
+         snt.nets.MLP([200, 200])])
     decoder_module = snt.Sequential([
         lambda x: tf.reshape(x, [-1, 4, 4, 1]),
         snt.Residual(snt.Conv2D(1, 3)), lambda x: tf.reshape(x, [-1, 16]),
-        snt.nets.MLP([200, 200, 784]), lambda x: tf.reshape(x, [-1, 28, 28, 1])
+        snt.nets.MLP([200, 200, 784]),
+        lambda x: tf.reshape(x, [-1, 28, 28, 1])
     ])
     output_distribution_fn = vae.BERNOULLI_FN
 
@@ -107,7 +87,8 @@ model = vae.VAE(
     output_dist_fn=output_distribution_fn)
 
 # build model
-data_ph = tf.placeholder(tf.float32, shape=(args.batch_size, ) + data_shape[1:])
+data_ph = tf.placeholder(
+    tf.float32, shape=(args.batch_size, ) + data_shape[1:])
 model(data_ph, analytic_kl=True)
 sample = model.sample()
 
@@ -147,9 +128,9 @@ with tf.Session(config=config) as session:
             np.log(2.) * reduce(operator.mul, data_shape[-3:]))
         print(
             "bits per dim: {:7.5f}\tdistortion: {:7.5f}\trate: {:7.5f}\tprior_logp: \
-            {:7.5f}\tposterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}".
-            format(bits_per_dim, mean_distortion, mean_rate, mean_prior_logp,
-                   mean_posterior_logp, mean_elbo, mean_iw_elbo))
+            {:7.5f}\tposterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}"
+            .format(bits_per_dim, mean_distortion, mean_rate, mean_prior_logp,
+                    mean_posterior_logp, mean_elbo, mean_iw_elbo))
 
         generated_img = session.run(sample)
         for i in range(generated_img.shape[0]):

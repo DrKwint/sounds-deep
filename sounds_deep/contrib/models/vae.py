@@ -10,7 +10,7 @@ STD_GAUSSIAN_FN = lambda latent_dimension: tfd.MultivariateNormalDiag(
     loc=tf.zeros(latent_dimension), scale_diag=tf.ones(latent_dimension))
 SOFTPLUS_GAUSSIAN_FN = lambda loc, scale: tfd.MultivariateNormalDiagWithSoftplusScale(
             loc=loc, scale_diag=scale)
-BERNOULLI_FN = lambda loc: lambda data: tfd.Bernoulli(loc).log_prob(data)
+BERNOULLI_FN = lambda loc: tfd.Bernoulli(loc)
 
 
 class VAE(snt.AbstractModule):
@@ -71,7 +71,8 @@ class VAE(snt.AbstractModule):
             encoder_net (snt.Module): Encoder mapping from rank 4 input to rank 2 output.
             decoder_net (Tensor -> Tensor): Decoder mapping from a rank 2 input to rank 4 output.
             prior_fn (int -> tfd.Distribution): Callable which takes an integral dimension size.
-            posterior_fn (Tensor -> Tensor -> tfd.Distribution): Callable which takes location and scale and returns a tfd distribution.
+            posterior_fn (Tensor -> Tensor -> tfd.Distribution): Callable which takes location and
+                                                                 scale and returns a tfd distribution.
             output_dist_fn (Tensor -> tfd.Distribution): Callable from loc to a tfd distribution.
         """
         super(VAE, self).__init__(name=name)
@@ -89,9 +90,12 @@ class VAE(snt.AbstractModule):
         """Builds VAE (or IWAE depending on arguments).
 
         Args:
-            inputs (Tensor): A rank 4 tensor with NHWC shape. Values of this tensor are assumed to be in `[0,1]`.
-            n_samples (int): Number of samples to use in importance weighting. Model is a VAE if `n_samples == 1` and an IWAE if `n_samples > 1`.
-            analytic_kl (bool): Whether to use a built-in analytic calculation of KL-divergence if it's available. This setting is treated as `False` if `n_samples > 1`.
+            inputs (Tensor): A rank 4 tensor with NHWC shape. Values of this tensor are assumed to
+                             be in `[0,1]`.
+            n_samples (int): Number of samples to use in importance weighting. Model is a VAE if
+                             `n_samples == 1` and an IWAE if `n_samples > 1`.
+            analytic_kl (bool): Whether to use a built-in analytic calculation of KL-divergence if
+                                it's available. This setting is treated as `False` if `n_samples > 1`.
         Returns:
             Tensor: result of encoding, sampling, and decoding inputs in [0,1]
         """
@@ -105,15 +109,12 @@ class VAE(snt.AbstractModule):
         self.output_distribution = tfd.Independent(
             self._output_dist_fn(output), reinterpreted_batch_ndims=3)
 
-        # distortion = -discretized_logistic(sample=x, mean=output, logscale=self._log_scale)
         distortion = -self.output_distribution.log_prob(x)
-        # distortion = tf.Print(distortion, [distortion], "distortion: ")
         if analytic_kl and n_samples == 1:
             rate = tfd.kl_divergence(self.latent_posterior, self.latent_prior)
         else:
             rate = (self.latent_posterior.log_prob(latent_posterior_sample) -
                     self.latent_prior.log_prob(latent_posterior_sample))
-        # rate = tf.Print(rate, [rate], "rate: ")
         with tf.control_dependencies(
             [tf.assert_positive(rate),
              tf.assert_positive(distortion)]):
@@ -125,7 +126,6 @@ class VAE(snt.AbstractModule):
         self.posterior_logp = self.latent_posterior.log_prob(
             latent_posterior_sample)
         self.elbo = tf.reduce_mean(tf.reduce_logsumexp(elbo_local, axis=0))
-        # self.elbo = tf.Print(self.elbo, [self.elbo], "elbo: ")
         self.importance_weighted_elbo = tf.reduce_mean(
             tf.reduce_logsumexp(elbo_local, axis=0) -
             tf.log(tf.to_float(n_samples)))
