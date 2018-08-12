@@ -9,6 +9,7 @@ class NamedLatentVAE(snt.AbstractModule):
     def __init__(self,
                  latent_dimension,
                  nv_latent_dimension,
+                 nv_encoder_net,
                  encoder_net,
                  decoder_net,
                  prior_fn=vae.STD_GAUSSIAN_FN,
@@ -16,6 +17,7 @@ class NamedLatentVAE(snt.AbstractModule):
                  output_dist_fn=vae.BERNOULLI_FN,
                  name='named_latent_vae'):
         super(NamedLatentVAE, self).__init__(name=name)
+        self._nv_encoder = nv_encoder_net
         self._encoder = encoder_net
         self._decoder = decoder_net
         self._latent_posterior_fn = posterior_fn
@@ -33,20 +35,23 @@ class NamedLatentVAE(snt.AbstractModule):
                temperature,
                n_samples=1,
                analytic_kl=True):
-        x = inputs
-        encoder_repr = self._encoder(x)
-
-        # define latent distributions
-        self.latent_posterior = self._latent_posterior_fn(
-            self._loc(encoder_repr), self._scale(encoder_repr))
+        # named latent
+        nv_encoder_repr = tf.keras.layers.Flatten()(self._nv_encoder(inputs))
+        nv_logits = self._nv_logits(nv_encoder_repr)
         self.nv_latent_prior = tfd.ExpRelaxedOneHotCategorical(
             temperature, logits=hvar_labels)
         self.nv_latent_posterior = tfd.ExpRelaxedOneHotCategorical(
-            temperature, logits=self._nv_logits(encoder_repr))
+            temperature, logits=nv_logits)
+        nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
+
+        # machine latent
+        encoder_repr = tf.concat([nv_encoder_repr, tf.squeeze(tf.exp(nv_latent_posterior_sample))], axis=1)
+        nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
+        self.latent_posterior = self._latent_posterior_fn(
+            self._loc(encoder_repr), self._scale(encoder_repr))
 
         # draw latent posterior sample
         latent_posterior_sample = self.latent_posterior.sample(n_samples)
-        nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
         joint_latent_posterior_sample = tf.concat(
             [tf.exp(nv_latent_posterior_sample), latent_posterior_sample],
             axis=2)
@@ -57,7 +62,7 @@ class NamedLatentVAE(snt.AbstractModule):
         self.output_distribution = tfd.Independent(
             self._output_dist_fn(output), reinterpreted_batch_ndims=3)
 
-        distortion = -self.output_distribution.log_prob(x)
+        distortion = -self.output_distribution.log_prob(inputs)
         if analytic_kl and n_samples == 1:
             rate = tfd.kl_divergence(self.latent_posterior, self.latent_prior)
         else:
