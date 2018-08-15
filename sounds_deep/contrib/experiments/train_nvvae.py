@@ -40,6 +40,8 @@ if args.dataset == 'cifar10':
 elif args.dataset == 'mnist':
     train_data, train_labels, _, _ = data.load_mnist('./data/')
     train_data = np.reshape(train_data, [-1, 28, 28, 1])
+# train_data = train_data[:5*args.batch_size]
+# train_labels = train_labels[:5*args.batch_size]
 data_shape = (args.batch_size, ) + train_data.shape[1:]
 label_shape = (args.batch_size, ) + train_labels.shape[1:]
 batches_per_epoch = train_data.shape[0] // args.batch_size
@@ -108,7 +110,10 @@ data_ph = tf.placeholder(
     tf.float32, shape=(args.batch_size, ) + data_shape[1:])
 label_ph = tf.placeholder(tf.float32, shape=label_shape)
 model(data_ph, label_ph, temperature_ph, analytic_kl=True)
-# sample = model.sample(temperature=temperature_ph)
+
+num_samples = 10
+nv_sample_ph = tf.placeholder_with_default(tf.ones([num_samples,10]), [num_samples, 10])
+sample = model.sample(sample_shape=[num_samples], temperature=temperature_ph, nv_prior_sample=nv_sample_ph)
 
 optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
 train_op = optimizer.minimize(-model.elbo)
@@ -129,8 +134,10 @@ config.gpu_options.allow_growth = True
 with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     for epoch in range(args.epochs):
-        temperature = np.max(
-            [0.5, np.exp(1e-5 * -float(epoch * train_data.shape[0]))])
+        # temperature = 0.3
+        temperature = 2./3.
+        # temperature = np.max(
+        #     [0.5, np.exp(1e-5 * -float(epoch * train_data.shape[0]))])
         # temperature = float(10. / (epoch + 1))
         print("Temperature: {}".format(temperature))
 
@@ -139,7 +146,7 @@ with tf.Session(config=config) as session:
             arrays = next(train_gen)
             feed_dict[data_ph] = arrays[0]
             feed_dict[label_ph] = arrays[1]
-            feed_dict[temperature_ph] = float(4. / (epoch + 1))
+            feed_dict[temperature_ph] = temperature
             return feed_dict
 
         print("EPOCH {}".format(epoch))
@@ -169,8 +176,11 @@ with tf.Session(config=config) as session:
                     mean_prior_logp, mean_posterior_logp, mean_elbo,
                     mean_iw_elbo))
 
-        # generated_img = session.run(sample, {temperature_ph: temperature})
-        # for i in range(generated_img.shape[0]):
-        #     img = np.clip(np.squeeze(generated_img[i]), 0, 1)
-        #     scipy.misc.toimage(np.squeeze(generated_img[i])).save(
-        #         'epoch{}_{}.jpg'.format(epoch, i))
+        for c in range(10):
+            nv_sample_val = np.zeros([num_samples, 10], dtype=float)
+            nv_sample_val[c] = 1.
+            generated_img = session.run(sample, {temperature_ph: temperature, nv_sample_ph: nv_sample_val})
+            for i in range(generated_img.shape[0]):
+                img = np.clip(np.squeeze(generated_img[i]), 0, 1)
+                scipy.misc.toimage(np.squeeze(generated_img[i])).save(
+                    'epoch{}_class{}_{}.jpg'.format(epoch, c, i))

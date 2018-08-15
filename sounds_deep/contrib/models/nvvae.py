@@ -45,13 +45,21 @@ class NamedLatentVAE(snt.AbstractModule):
         nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
 
         # machine latent
-        encoder_repr = tf.concat([nv_encoder_repr, tf.squeeze(tf.exp(nv_latent_posterior_sample))], axis=1)
+        encoder_repr = tf.concat(
+            [nv_encoder_repr,
+             tf.squeeze(tf.exp(nv_latent_posterior_sample))],
+            axis=1)
         nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
         self.latent_posterior = self._latent_posterior_fn(
             self._loc(encoder_repr), self._scale(encoder_repr))
 
         # draw latent posterior sample
         latent_posterior_sample = self.latent_posterior.sample(n_samples)
+        # nv_latent_posterior_sample = tf.Print(nv_latent_posterior_sample, [temperature], summarize=10)
+        # nv_latent_posterior_sample = tf.Print(nv_latent_posterior_sample, [nv_logits], summarize=10)
+        # nv_latent_posterior_sample = tf.Print(nv_latent_posterior_sample, [tf.exp(nv_latent_posterior_sample)], summarize=10)
+        # nv_latent_posterior_sample = tf.Print(nv_latent_posterior_sample, [hvar_labels], summarize=10)
+        # nv_latent_posterior_sample = tf.Print(nv_latent_posterior_sample, [tf.exp(self.nv_latent_prior.sample())], summarize=10)
         joint_latent_posterior_sample = tf.concat(
             [tf.exp(nv_latent_posterior_sample), latent_posterior_sample],
             axis=2)
@@ -68,15 +76,15 @@ class NamedLatentVAE(snt.AbstractModule):
         else:
             rate = (self.latent_posterior.log_prob(latent_posterior_sample) -
                     self.latent_prior.log_prob(latent_posterior_sample))
-        nv_rate = self.nv_latent_posterior.log_prob(
-            nv_latent_posterior_sample) - self.nv_latent_prior.log_prob(
-                nv_latent_posterior_sample)
-        with tf.control_dependencies([
-                tf.assert_positive(rate),
-                tf.assert_positive(distortion)
-                # tf.assert_positive(nv_rate)
-        ]):
-            elbo_local = -(rate + 16 * nv_rate + distortion)
+        nv_rate = tf.nn.softmax_cross_entropy_with_logits_v2(
+            labels=hvar_labels, logits=nv_latent_posterior_sample)
+        # nv_rate = self.nv_latent_posterior.log_prob(
+        #     nv_latent_posterior_sample) - self.nv_latent_prior.log_prob(
+        #         nv_latent_posterior_sample)
+        with tf.control_dependencies(
+            [tf.assert_positive(rate),
+             tf.assert_positive(distortion)]):
+            elbo_local = -(rate + nv_rate + distortion)
 
         self.distortion = distortion
         self.rate = rate
@@ -98,6 +106,8 @@ class NamedLatentVAE(snt.AbstractModule):
                sample_shape=(),
                seed=None,
                temperature=0.01,
+               prior_sample=None,
+               nv_prior_sample=None,
                name='sample'):
         """Generate samples of the specified shape.
 
@@ -115,21 +125,29 @@ class NamedLatentVAE(snt.AbstractModule):
         if sample_shape == (): sample_shape = 1
         with self._enter_variable_scope():
             with tf.variable_scope(name):
-                prior_sample = self.latent_prior.sample(
-                    sample_shape, seed, 'prior_sample')
-                prior_sample = tf.reshape(prior_sample, [-1, 4, 4, 1])
-                prior_sample = tf.layers.conv2d(
-                    prior_sample,
-                    1,
-                    1,
-                    use_bias=False,
-                    kernel_initializer=tf.ones_initializer,
-                    padding='same',
-                    trainable=False)
-                prior_sample = tf.reshape(prior_sample, [1, -1])
-                nv_prior_sample = tfd.ExpRelaxedOneHotCategorical(
-                    temperature=temperature, logits=tf.ones(10)).sample(
-                        sample_shape, seed, 'nv_prior_sample')
+
+                if prior_sample is None:
+                    prior_sample = self.latent_prior.sample(
+                        sample_shape, seed, 'prior_sample')
+                    # this reshape -> conv id -> reshape bullshit is here because some bug in Sonnet
+                    # is keeping the output of a tfd distribution sample from going right to a linear
+                    prior_sample = tf.reshape(prior_sample, [-1, 4, 4, 1])
+                    prior_sample = tf.layers.conv2d(
+                        prior_sample,
+                        1,
+                        1,
+                        use_bias=False,
+                        kernel_initializer=tf.ones_initializer,
+                        padding='same',
+                        trainable=False)
+                    prior_sample = tf.reshape(prior_sample,
+                                              sample_shape + [-1])
+
+                if nv_prior_sample is None:
+                    nv_prior_sample = tfd.ExpRelaxedOneHotCategorical(
+                        temperature=temperature, logits=tf.ones(10)).sample(
+                            sample_shape, seed, 'nv_prior_sample')
+
                 joint_prior_sample = tf.concat(
                     [tf.exp(nv_prior_sample), prior_sample], axis=-1)
                 output = self._decoder(joint_prior_sample)
