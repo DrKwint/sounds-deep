@@ -24,45 +24,64 @@ class NamedLatentVAE(snt.AbstractModule):
         self._output_dist_fn = output_dist_fn
 
         with self._enter_variable_scope():
-            self._loc = snt.Linear(latent_dimension)
-            self._scale = snt.Linear(latent_dimension)
-            self._nv_logits = snt.Linear(nv_latent_dimension)
+            self._loc = snt.Sequential([
+                snt.BatchFlatten(preserve_dims=2),
+                snt.BatchApply(snt.Linear(latent_dimension))
+            ])
+            self._scale = snt.Sequential([
+                snt.BatchFlatten(preserve_dims=2),
+                snt.BatchApply(snt.Linear(latent_dimension))
+            ])
+            self._nv_logits = snt.Sequential(
+                [snt.BatchFlatten(),
+                 snt.Linear(nv_latent_dimension)])
             self.latent_prior = prior_fn(latent_dimension)
 
     def _build(self,
-               inputs,
+               unlabeled_input,
+               labeled_input,
                hvar_labels,
                temperature,
-               n_samples=1,
+               n_samples=3,
                analytic_kl=True):
-        # named latent
-        nv_encoder_repr = tf.keras.layers.Flatten()(self._nv_encoder(inputs))
-        nv_logits = self._nv_logits(nv_encoder_repr)
+        """data must be NHWC"""
+        data = tf.concat([labeled_input, unlabeled_input], axis=0)
+
+        # predict y
+        nv_logits = self._nv_logits(self._nv_encoder(unlabeled_input))
         self.nv_latent_prior = tfd.ExpRelaxedOneHotCategorical(
-            temperature, logits=hvar_labels)
+            temperature, logits=tf.ones_like(nv_logits))
         self.nv_latent_posterior = tfd.ExpRelaxedOneHotCategorical(
             temperature, logits=nv_logits)
         nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
+        predicted_nv = tf.concat(
+            [
+                tf.tile(
+                    tf.expand_dims(hvar_labels, axis=0), [n_samples, 1, 1]),
+                tf.exp(nv_latent_posterior_sample)
+            ],
+            axis=1)
 
         # machine latent
-        encoder_repr = tf.concat(
-            [nv_encoder_repr,
-             tf.squeeze(tf.exp(nv_latent_posterior_sample))],
-            axis=1)
-        nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
+        data_shape = data.get_shape().as_list()
+        img_predicted_nv = tf.tile(
+            tf.expand_dims(tf.expand_dims(predicted_nv, 2), 2),
+            [1, 1, data_shape[1], data_shape[2], 1])
+        z_encoder_input = tf.concat(
+            [
+                tf.tile(tf.expand_dims(data, 0), [n_samples, 1, 1, 1, 1]),
+                img_predicted_nv
+            ],
+            axis=4)
+        batch_encoder = snt.BatchApply(self._encoder)
+        z_encoder_repr = batch_encoder(z_encoder_input)
         self.latent_posterior = self._latent_posterior_fn(
-            self._loc(encoder_repr), self._scale(encoder_repr))
+            self._loc(z_encoder_repr), self._scale(z_encoder_repr))
 
         # draw latent posterior sample
-        latent_posterior_sample = self.latent_posterior.sample(n_samples)
-        # nv_latent_posterior_sample = tf.Print(nv_latent_posterior_sample, [temperature], summarize=10)
-        # nv_latent_posterior_sample = tf.Print(nv_latent_posterior_sample, [nv_logits], summarize=10)
-        # nv_latent_posterior_sample = tf.Print(nv_latent_posterior_sample, [tf.exp(nv_latent_posterior_sample)], summarize=10)
-        # nv_latent_posterior_sample = tf.Print(nv_latent_posterior_sample, [hvar_labels], summarize=10)
-        # nv_latent_posterior_sample = tf.Print(nv_latent_posterior_sample, [tf.exp(self.nv_latent_prior.sample())], summarize=10)
+        latent_posterior_sample = self.latent_posterior.sample()
         joint_latent_posterior_sample = tf.concat(
-            [tf.exp(nv_latent_posterior_sample), latent_posterior_sample],
-            axis=2)
+            [predicted_nv, latent_posterior_sample], axis=2)
 
         # define output distribution
         sample_decoder = snt.BatchApply(self._decoder)
@@ -70,21 +89,21 @@ class NamedLatentVAE(snt.AbstractModule):
         self.output_distribution = tfd.Independent(
             self._output_dist_fn(output), reinterpreted_batch_ndims=3)
 
-        distortion = -self.output_distribution.log_prob(inputs)
+        distortion = -self.output_distribution.log_prob(data)
         if analytic_kl and n_samples == 1:
             rate = tfd.kl_divergence(self.latent_posterior, self.latent_prior)
         else:
             rate = (self.latent_posterior.log_prob(latent_posterior_sample) -
                     self.latent_prior.log_prob(latent_posterior_sample))
-        nv_rate = tf.nn.softmax_cross_entropy_with_logits_v2(
-            labels=hvar_labels, logits=nv_latent_posterior_sample)
-        # nv_rate = self.nv_latent_posterior.log_prob(
-        #     nv_latent_posterior_sample) - self.nv_latent_prior.log_prob(
-        #         nv_latent_posterior_sample)
+        nv_entropy = -tf.reduce_sum(tf.exp(nv_logits) * nv_logits, axis=-1)
+        nv_rate = self.nv_latent_posterior.log_prob(
+            nv_latent_posterior_sample) - self.nv_latent_prior.log_prob(
+                nv_latent_posterior_sample)
         with tf.control_dependencies(
-            [tf.assert_positive(rate),
+            [#tf.assert_positive(rate),
              tf.assert_positive(distortion)]):
-            elbo_local = -(rate + nv_rate + distortion)
+            elbo_local = -(rate + distortion)
+            labeled_terms = nv_entropy + 0.8 * nv_rate
 
         self.distortion = distortion
         self.rate = rate
@@ -96,10 +115,10 @@ class NamedLatentVAE(snt.AbstractModule):
             nv_latent_posterior_sample)
         self.nv_posterior_logp = self.nv_latent_posterior.log_prob(
             nv_latent_posterior_sample)
-        self.elbo = tf.reduce_mean(tf.reduce_logsumexp(elbo_local, axis=0))
+        self.elbo = tf.reduce_mean(tf.reduce_logsumexp(elbo_local, axis=0)) + tf.reduce_mean(labeled_terms)
         self.importance_weighted_elbo = tf.reduce_mean(
             tf.reduce_logsumexp(elbo_local, axis=0) -
-            tf.log(tf.to_float(n_samples)))
+            tf.log(tf.to_float(n_samples))) + tf.reduce_mean(labeled_terms)
         return output
 
     def sample(self,

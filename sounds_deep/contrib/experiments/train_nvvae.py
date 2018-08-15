@@ -106,10 +106,12 @@ model = nvvae.NamedLatentVAE(
 
 # build model
 temperature_ph = tf.placeholder(tf.float32)
-data_ph = tf.placeholder(
-    tf.float32, shape=(args.batch_size, ) + data_shape[1:])
-label_ph = tf.placeholder(tf.float32, shape=label_shape)
-model(data_ph, label_ph, temperature_ph, analytic_kl=True)
+labeled_data_ph = tf.placeholder(
+    tf.float32, shape=(args.batch_size,)+ data_shape[1:])
+unlabeled_data_ph = tf.placeholder(
+    tf.float32, shape=(args.batch_size,) + data_shape[1:])
+label_ph = tf.placeholder(tf.float32, shape=(args.batch_size,) + label_shape[1:])
+model(unlabeled_data_ph, labeled_data_ph, label_ph, temperature_ph, analytic_kl=True)
 
 num_samples = 10
 nv_sample_ph = tf.placeholder_with_default(tf.ones([num_samples,10]), [num_samples, 10])
@@ -144,7 +146,8 @@ with tf.Session(config=config) as session:
         def feed_dict_fn():
             feed_dict = dict()
             arrays = next(train_gen)
-            feed_dict[data_ph] = arrays[0]
+            feed_dict[unlabeled_data_ph] = arrays[0]
+            feed_dict[labeled_data_ph] = arrays[0]
             feed_dict[label_ph] = arrays[1]
             feed_dict[temperature_ph] = temperature
             return feed_dict
