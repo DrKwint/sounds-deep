@@ -22,7 +22,7 @@ pip uninstall tensorflow && pip install tensorflow-gpu # run this line if you wa
 
 Setup is more complicated than this on `Crane`, but talk to Ellie directly about it because we don't have an automated process nailed down yet.
 
-Documentation can build built by running
+Documentation on `master` can be found at [sounds-deep.readthedocs.io](https://sounds-deep.readthedocs.io/en/latest/) or can be built by running
 ```
 ./docs/build_scrip.sh
 ```
