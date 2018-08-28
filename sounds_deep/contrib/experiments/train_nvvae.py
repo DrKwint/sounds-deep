@@ -17,6 +17,7 @@ import sounds_deep.contrib.util.util as util
 import sounds_deep.contrib.models.vae as vae
 import sounds_deep.contrib.models.nvvae as nvvae
 import sounds_deep.contrib.parameterized_distributions.discretized_logistic as discretized_logistic
+import sounds_deep.contrib.util.plot as plot
 
 parser = argparse.ArgumentParser(description='Train a VAE model.')
 parser.add_argument('--batch_size', type=int, default=32)
@@ -38,10 +39,10 @@ def apply_temp(a, temperature=1.0):
 if args.dataset == 'cifar10':
     train_data, train_labels, _, _ = data.load_cifar10('./data/')
 elif args.dataset == 'mnist':
-    train_data, train_labels, _, _ = data.load_mnist('./data/')
+    train_data, train_labels, test_data, test_labels = data.load_mnist('./data/')
+    train_data = train_data[:args.batch_size*10]
+    train_labels = train_labels[:args.batch_size*10]
     train_data = np.reshape(train_data, [-1, 28, 28, 1])
-# train_data = train_data[:5*args.batch_size]
-# train_labels = train_labels[:5*args.batch_size]
 data_shape = (args.batch_size, ) + train_data.shape[1:]
 label_shape = (args.batch_size, ) + train_labels.shape[1:]
 batches_per_epoch = train_data.shape[0] // args.batch_size
@@ -113,7 +114,7 @@ unlabeled_data_ph = tf.placeholder(
 label_ph = tf.placeholder(tf.float32, shape=(args.batch_size,) + label_shape[1:])
 model(unlabeled_data_ph, labeled_data_ph, label_ph, temperature_ph, analytic_kl=True)
 
-num_samples = 10
+num_samples = 16
 nv_sample_ph = tf.placeholder_with_default(tf.ones([num_samples,10]), [num_samples, 10])
 sample = model.sample(sample_shape=[num_samples], temperature=temperature_ph, nv_prior_sample=nv_sample_ph)
 
@@ -179,11 +180,9 @@ with tf.Session(config=config) as session:
                     mean_prior_logp, mean_posterior_logp, mean_elbo,
                     mean_iw_elbo))
 
-        for c in range(10):
-            nv_sample_val = np.zeros([num_samples, 10], dtype=float)
-            nv_sample_val[c] = 1.
-            generated_img = session.run(sample, {temperature_ph: temperature, nv_sample_ph: nv_sample_val})
-            for i in range(generated_img.shape[0]):
-                img = np.clip(np.squeeze(generated_img[i]), 0, 1)
-                scipy.misc.toimage(np.squeeze(generated_img[i])).save(
-                    'epoch{}_class{}_{}.jpg'.format(epoch, c, i))
+        for temp in [0.01, 0.5]:
+            for c in range(10):
+                nv_sample_val = np.zeros([num_samples, 10], dtype=float)
+                nv_sample_val[c] = 1.
+                generated_img = session.run(sample, {temperature_ph: temp, nv_sample_ph: nv_sample_val})
+                plot.plot('epoch{}_class{}_temp{}.png'.format(epoch, c, temp), np.squeeze(generated_img), 4, 4)

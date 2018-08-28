@@ -99,9 +99,9 @@ class NamedLatentVAE(snt.AbstractModule):
         nv_rate = self.nv_latent_posterior.log_prob(
             nv_latent_posterior_sample) - self.nv_latent_prior.log_prob(
                 nv_latent_posterior_sample)
-        with tf.control_dependencies(
-            [#tf.assert_positive(rate),
-             tf.assert_positive(distortion)]):
+        with tf.control_dependencies([  #tf.assert_positive(rate),
+                tf.assert_positive(distortion)
+        ]):
             elbo_local = -(rate + distortion)
             labeled_terms = nv_entropy + 0.8 * nv_rate
 
@@ -115,7 +115,8 @@ class NamedLatentVAE(snt.AbstractModule):
             nv_latent_posterior_sample)
         self.nv_posterior_logp = self.nv_latent_posterior.log_prob(
             nv_latent_posterior_sample)
-        self.elbo = tf.reduce_mean(tf.reduce_logsumexp(elbo_local, axis=0)) + tf.reduce_mean(labeled_terms)
+        self.elbo = tf.reduce_mean(tf.reduce_logsumexp(
+            elbo_local, axis=0)) + tf.reduce_mean(nv_entropy, axis=0)
         self.importance_weighted_elbo = tf.reduce_mean(
             tf.reduce_logsumexp(elbo_local, axis=0) -
             tf.log(tf.to_float(n_samples))) + tf.reduce_mean(labeled_terms)
