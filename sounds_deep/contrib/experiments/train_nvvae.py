@@ -40,8 +40,8 @@ if args.dataset == 'cifar10':
     train_data, train_labels, _, _ = data.load_cifar10('./data/')
 elif args.dataset == 'mnist':
     train_data, train_labels, test_data, test_labels = data.load_mnist('./data/')
-    train_data = train_data[:args.batch_size*10]
-    train_labels = train_labels[:args.batch_size*10]
+    train_data = train_data[:args.batch_size*100]
+    train_labels = train_labels[:args.batch_size*100]
     train_data = np.reshape(train_data, [-1, 28, 28, 1])
 data_shape = (args.batch_size, ) + train_data.shape[1:]
 label_shape = (args.batch_size, ) + train_labels.shape[1:]
@@ -124,9 +124,9 @@ train_op = optimizer.minimize(-model.elbo)
 verbose_ops_dict = dict()
 verbose_ops_dict['distortion'] = model.distortion
 verbose_ops_dict['rate'] = model.rate
-verbose_ops_dict['nv_rate'] = model.nv_rate
+verbose_ops_dict['nv_entropy'] = model.nv_entropy
+verbose_ops_dict['nv_log_prob'] = model.nv_log_prob
 verbose_ops_dict['elbo'] = model.elbo
-verbose_ops_dict['iw_elbo'] = model.importance_weighted_elbo
 verbose_ops_dict['prior_logp'] = model.prior_logp
 verbose_ops_dict['posterior_logp'] = model.posterior_logp
 verbose_ops_dict['nv_prior_logp'] = model.nv_prior_logp
@@ -137,11 +137,7 @@ config.gpu_options.allow_growth = True
 with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     for epoch in range(args.epochs):
-        # temperature = 0.3
-        temperature = 2./3.
-        # temperature = np.max(
-        #     [0.5, np.exp(1e-5 * -float(epoch * train_data.shape[0]))])
-        # temperature = float(10. / (epoch + 1))
+        temperature = 0.5
         print("Temperature: {}".format(temperature))
 
         def feed_dict_fn():
@@ -164,9 +160,9 @@ with tf.Session(config=config) as session:
 
         mean_distortion = np.mean(out_dict['distortion'])
         mean_rate = np.mean(out_dict['rate'])
-        mean_nv_rate = np.mean(out_dict['nv_rate'])
+        mean_nv_entropy = np.mean(out_dict['nv_entropy'])
+        mean_nv_log_prob = np.mean(out_dict['nv_log_prob'])
         mean_elbo = np.mean(out_dict['elbo'])
-        mean_iw_elbo = np.mean(out_dict['iw_elbo'])
         mean_prior_logp = np.mean(out_dict['prior_logp'])
         mean_posterior_logp = np.mean(out_dict['posterior_logp'])
         mean_nv_prior_logp = np.mean(out_dict['nv_prior_logp'])
@@ -175,10 +171,9 @@ with tf.Session(config=config) as session:
         bits_per_dim = -mean_elbo / (
             np.log(2.) * reduce(operator.mul, data_shape[-3:]))
         print(
-            "bits per dim: {:7.4f}\tdistortion: {:7.4f}\trate: {:7.4f}\tnv_rate: {:7.4f}\tprior_logp: {:7.4f}\tposterior_logp: {:7.4f}\telbo: {:7.4f}\tiw_elbo: {:7.4f}"
-            .format(bits_per_dim, mean_distortion, mean_rate, mean_nv_rate,
-                    mean_prior_logp, mean_posterior_logp, mean_elbo,
-                    mean_iw_elbo))
+            "bits per dim: {:7.4f}\tdistortion: {:7.4f}\trate: {:7.4f}\tnv_entropy: {:7.4f}\tnv_log_prob: {:7.4f}\tprior_logp: {:7.4f}\tposterior_logp: {:7.4f}\telbo: {:7.4f}"
+            .format(bits_per_dim, mean_distortion, mean_rate, mean_nv_entropy, mean_nv_log_prob,
+                    mean_prior_logp, mean_posterior_logp, mean_elbo))
 
         for temp in [0.01, 0.5]:
             for c in range(10):

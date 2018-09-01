@@ -89,7 +89,7 @@ model = vae.VAE(
 # build model
 data_ph = tf.placeholder(
     tf.float32, shape=(args.batch_size, ) + data_shape[1:])
-model(data_ph, analytic_kl=True)
+model(data_ph, analytic_kl=False)
 sample = model.sample()
 
 optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)

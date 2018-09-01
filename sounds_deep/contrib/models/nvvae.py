@@ -42,35 +42,35 @@ class NamedLatentVAE(snt.AbstractModule):
                labeled_input,
                hvar_labels,
                temperature,
-               n_samples=3,
+               n_samples=1,
                analytic_kl=True):
         """data must be NHWC"""
         data = tf.concat([labeled_input, unlabeled_input], axis=0)
 
         # predict y
         nv_logits = self._nv_logits(self._nv_encoder(unlabeled_input))
-        self.nv_latent_prior = tfd.ExpRelaxedOneHotCategorical(
-            temperature, logits=tf.ones_like(nv_logits))
         self.nv_latent_posterior = tfd.ExpRelaxedOneHotCategorical(
             temperature, logits=nv_logits)
         nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
-        predicted_nv = tf.concat(
+        nv_predicted = tf.concat(
             [
                 tf.tile(
                     tf.expand_dims(hvar_labels, axis=0), [n_samples, 1, 1]),
                 tf.exp(nv_latent_posterior_sample)
             ],
             axis=1)
+        self.nv_latent_prior = tfd.ExpRelaxedOneHotCategorical(
+            temperature, logits=tf.ones_like(nv_predicted))
 
         # machine latent
         data_shape = data.get_shape().as_list()
-        img_predicted_nv = tf.tile(
-            tf.expand_dims(tf.expand_dims(predicted_nv, 2), 2),
+        img_nv_predicted = tf.tile(
+            tf.expand_dims(tf.expand_dims(nv_predicted, 2), 2),
             [1, 1, data_shape[1], data_shape[2], 1])
         z_encoder_input = tf.concat(
             [
                 tf.tile(tf.expand_dims(data, 0), [n_samples, 1, 1, 1, 1]),
-                img_predicted_nv
+                img_nv_predicted
             ],
             axis=4)
         batch_encoder = snt.BatchApply(self._encoder)
@@ -81,7 +81,7 @@ class NamedLatentVAE(snt.AbstractModule):
         # draw latent posterior sample
         latent_posterior_sample = self.latent_posterior.sample()
         joint_latent_posterior_sample = tf.concat(
-            [predicted_nv, latent_posterior_sample], axis=2)
+            [nv_predicted, latent_posterior_sample], axis=2)
 
         # define output distribution
         sample_decoder = snt.BatchApply(self._decoder)
@@ -89,37 +89,36 @@ class NamedLatentVAE(snt.AbstractModule):
         self.output_distribution = tfd.Independent(
             self._output_dist_fn(output), reinterpreted_batch_ndims=3)
 
+        # loss calculation
+        # supervised:
         distortion = -self.output_distribution.log_prob(data)
-        if analytic_kl and n_samples == 1:
-            rate = tfd.kl_divergence(self.latent_posterior, self.latent_prior)
-        else:
-            rate = (self.latent_posterior.log_prob(latent_posterior_sample) -
-                    self.latent_prior.log_prob(latent_posterior_sample))
+        rate = (self.latent_posterior.log_prob(latent_posterior_sample) -
+                self.latent_prior.log_prob(latent_posterior_sample) -
+                self.nv_latent_prior.log_prob(nv_predicted))
+        supervised_distortion, unsupervised_distortion = tf.split(distortion, 2, axis=1)
+        supervised_rate, unsupervised_rate = tf.split(rate, 2, axis=1)
         nv_entropy = -tf.reduce_sum(tf.exp(nv_logits) * nv_logits, axis=-1)
-        nv_rate = self.nv_latent_posterior.log_prob(
-            nv_latent_posterior_sample) - self.nv_latent_prior.log_prob(
-                nv_latent_posterior_sample)
-        with tf.control_dependencies([  #tf.assert_positive(rate),
-                tf.assert_positive(distortion)
-        ]):
-            elbo_local = -(rate + distortion)
-            labeled_terms = nv_entropy + 0.8 * nv_rate
+        nv_log_prob = self.nv_latent_posterior.log_prob(nv_latent_posterior_sample)
+
+        supervised_local_elbo = -(supervised_distortion + supervised_rate)
+        unsupervised_local_elbo = -(unsupervised_distortion + unsupervised_rate) + nv_entropy
+
+        elbo_local = supervised_local_elbo + unsupervised_local_elbo + 0.8 * nv_log_prob
 
         self.distortion = distortion
         self.rate = rate
+        self.nv_entropy = nv_entropy
+        self.nv_log_prob = nv_log_prob
+
         self.prior_logp = self.latent_prior.log_prob(latent_posterior_sample)
         self.posterior_logp = self.latent_posterior.log_prob(
             latent_posterior_sample)
-        self.nv_rate = nv_rate
         self.nv_prior_logp = self.nv_latent_prior.log_prob(
-            nv_latent_posterior_sample)
+            nv_predicted)
         self.nv_posterior_logp = self.nv_latent_posterior.log_prob(
             nv_latent_posterior_sample)
         self.elbo = tf.reduce_mean(tf.reduce_logsumexp(
-            elbo_local, axis=0)) + tf.reduce_mean(nv_entropy, axis=0)
-        self.importance_weighted_elbo = tf.reduce_mean(
-            tf.reduce_logsumexp(elbo_local, axis=0) -
-            tf.log(tf.to_float(n_samples))) + tf.reduce_mean(labeled_terms)
+            elbo_local, axis=0))
         return output
 
     def sample(self,
