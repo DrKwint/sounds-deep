@@ -12,10 +12,10 @@ import numpy as np
 import scipy
 
 import sounds_deep.contrib.data.data as data
-import sounds_deep.contrib.models.hvae as hvae
+import sounds_deep.contrib.models.nvvae as nvvae
 import sounds_deep.contrib.util as util
 
-parser = argparse.ArgumentParser(description='Train a VAE model.')
+parser = argparse.ArgumentParser(description='Train a Named Variable VAE model.')
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--latent_dimension', type=int, default=32)
 parser.add_argument('--epochs', type=int, default=100)
@@ -81,6 +81,9 @@ with tf.Session(config=config) as session:
             feed_dict[label_ph] = arrays[1]
             feed_dict[temp_ph] = temperature # float(1. / (epoch + 1))
             return feed_dict
+        print(len(feed_dict_fn()))
+        print(feed_dict_fn().keys())
+        exit()
 
         print("EPOCH {}".format(epoch))
         out_dict = util.run_epoch_ops(

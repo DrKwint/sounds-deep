@@ -24,12 +24,10 @@ parser.add_argument('--learning_rate', type=float, default=3e-4)
 args = parser.parse_args()
 
 # load the data
-# train_data, _, _, _ = data.load_cifar10('./data/')
+train_data, _, _, _ = data.load_cifar10('./data/')
 # train_data, _, _, _ = data.load_mnist('./data/')
-train_data, _, _, _ = data.load_sudoku('./data')
-train_data = np.reshape(train_data, [-1, 81, 9])
+# train_data, _, _, _ = data.load_sudoku('./data')
 train_data = train_data.astype(np.float32)
-train_data += 5e-2
 data_shape = (args.batch_size, ) + train_data.shape[1:]
 batches_per_epoch = train_data.shape[0] // args.batch_size
 train_gen = data.data_generator(train_data, args.batch_size)

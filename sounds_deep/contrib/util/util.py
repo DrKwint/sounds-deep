@@ -11,14 +11,16 @@ def run_epoch_ops(session,
                   verbose=False):
     """
     Args:
-        session (tf.Session): Session containing the operations passed in `verbose_ops_dict` and `silent_ops`
+        session (tf.Session): Session with tf.Graph containing the operations
+            passed in `verbose_ops_dict` and `silent_ops`
         steps_per_epoch (int): number of times to run operations
-        verbose_ops_dict (dict): strings to tf operations whose values will be returned
+        verbose_ops_dict (dict): strings to tf operations whose values will be
+            returned
         feed_dict_fn (callable): called to retrieve the feed_dict
-                                   (dict of placeholders to np arrays)
+            (dict of tf.placeholder to np.array)
         verbose (bool): whether to use tqdm progressbar on stdout
     Return:
-        dict of str to numpy arrays or floats
+        dict of str to np.array parallel to the verbose_ops_dict
     """
     verbose_vals = {k: [] for k, v in verbose_ops_dict.items()}
     if verbose:
