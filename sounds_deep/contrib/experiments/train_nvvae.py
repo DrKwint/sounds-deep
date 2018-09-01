@@ -40,8 +40,6 @@ if args.dataset == 'cifar10':
     train_data, train_labels, _, _ = data.load_cifar10('./data/')
 elif args.dataset == 'mnist':
     train_data, train_labels, test_data, test_labels = data.load_mnist('./data/')
-    train_data = train_data[:args.batch_size*100]
-    train_labels = train_labels[:args.batch_size*100]
     train_data = np.reshape(train_data, [-1, 28, 28, 1])
 data_shape = (args.batch_size, ) + train_data.shape[1:]
 label_shape = (args.batch_size, ) + train_labels.shape[1:]
