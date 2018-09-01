@@ -4,6 +4,7 @@
 *.pkl
 docs_build/
 data/
+.pytest_cache/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
