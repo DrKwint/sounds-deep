@@ -49,9 +49,13 @@ class NamedLatentVAE(snt.AbstractModule):
 
         # predict y
         nv_logits = self._nv_logits(self._nv_encoder(unlabeled_input))
+        nv_labeled_logits = self._nv_logits(self._nv_encoder(labeled_input))
+        self.nv_labeled_latent_posterior = tfd.ExpRelaxedOneHotCategorical(
+            temperature, logits=nv_labeled_logits)
         self.nv_latent_posterior = tfd.ExpRelaxedOneHotCategorical(
             temperature, logits=nv_logits)
         nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
+        nv_labeled_posterior_sample = self.nv_labeled_latent_posterior.sample(n_samples)
         nv_predicted = tf.concat(
             [
                 tf.tile(
@@ -98,7 +102,7 @@ class NamedLatentVAE(snt.AbstractModule):
         supervised_distortion, unsupervised_distortion = tf.split(distortion, 2, axis=1)
         supervised_rate, unsupervised_rate = tf.split(rate, 2, axis=1)
         nv_entropy = -tf.reduce_sum(tf.exp(nv_logits) * nv_logits, axis=-1)
-        nv_log_prob = self.nv_latent_posterior.log_prob(nv_latent_posterior_sample)
+        nv_log_prob = tf.reduce_sum(hvar_labels * nv_labeled_posterior_sample, axis=-1)
 
         supervised_local_elbo = -(supervised_distortion + supervised_rate)
         unsupervised_local_elbo = -(unsupervised_distortion + unsupervised_rate) + nv_entropy
