@@ -10,52 +10,75 @@ import numpy as np
 import sonnet as snt
 import tensorflow as tf
 import scipy.misc
+from random import shuffle
 
 import sounds_deep.contrib.data.data as data
-import sounds_deep.contrib.util as util
+import sounds_deep.contrib.util.util as util
 
 tfd = tf.contrib.distributions
 tfb = tfd.bijectors
 parser = argparse.ArgumentParser(description='Train a VAE model.')
-parser.add_argument('--batch_size', type=int, default=16)
-parser.add_argument('--latent_dimension', type=int, default=50)
+parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--epochs', type=int, default=100)
-parser.add_argument('--learning_rate', type=float, default=3e-4)
+parser.add_argument('--learning_rate', type=float, default=5e-6)
 args = parser.parse_args()
 
 # load the data
-train_data, _, _, _ = data.load_cifar10('./data/')
-# train_data, _, _, _ = data.load_mnist('./data/')
+# train_data, _, _, _ = data.load_cifar10('./data/')
+train_data, _, _, _ = data.load_mnist('./data/')
+# train_data = np.reshape(train_data, [-1, 28, 28, 1])
 # train_data, _, _, _ = data.load_sudoku('./data')
 train_data = train_data.astype(np.float32)
 data_shape = (args.batch_size, ) + train_data.shape[1:]
 batches_per_epoch = train_data.shape[0] // args.batch_size
 train_gen = data.data_generator(train_data, args.batch_size)
 
+def fnfn(i):
+    def _fn(x, output_units):
+        first = snt.Linear(512)
+        net = snt.Sequential(
+            [first, tf.nn.relu, snt.Linear(512), tf.nn.relu,
+            snt.Linear(
+                output_units * 2,
+                initializers={
+                    'w': tf.initializers.zeros(),
+                    'b': tf.initializers.zeros()
+                }), lambda x: tf.split(x, 2, axis=-1)])
+        shift, log_scale = net(x)
+        # log_scale = tf.Print(log_scale, [tf.reduce_mean(x), tf.reduce_mean(first._w), tf.reduce_sum(log_scale, axis=-1)], message="{}: ".format(i))
+        return shift, log_scale
+    return tf.make_template("real_nvp_default_template", _fn)
+
 bijectors = []
-num_bijectors = 1
+num_bijectors = 32
 for i in range(num_bijectors):
+    #if i % 32 == 0:
+    #    bijectors.append(tfb.BatchNormalization())
+    if i > 0:
+        # permutation = list(range(784))
+        # shuffle(permutation)
+        bijectors.append(tfb.Permute(permutation=list(reversed(range(784)))))
     bijectors.append(
-        tfb.MaskedAutoregressiveFlow(
-            shift_and_log_scale_fn=tfb.masked_autoregressive_default_template(
-                hidden_layers=[512, 512])))
-    bijectors.append(tfb.Permute(permutation=list(reversed(range(9)))))
-flow_bijector = tfb.Chain(list(reversed(bijectors)))
+        tfb.RealNVP(
+            num_masked=784 // 2,
+            shift_and_log_scale_fn=fnfn(i)))
+    # if i < num_bijectors - 1:
+# bijectors.append(tfb.BatchNormalization())
+
+flow_bijector = tfb.Chain(bijectors)
+
 model = tfd.TransformedDistribution(
-    # distribution=tfd.MultivariateNormalDiag(loc=tf.zeros([args.batch_size, 784])),
-    distribution=tfd.Dirichlet(10 * tf.ones([args.batch_size, 81, 9])),
-    bijector=tfb.MaskedAutoregressiveFlow(
-        shift_and_log_scale_fn=tfb.masked_autoregressive_default_template(
-            hidden_layers=[512, 512])))
+    distribution=tfd.MultivariateNormalDiag(
+        loc=tf.zeros([args.batch_size, 784]),
+        scale_diag=tf.ones([args.batch_size, 784])),
+    bijector=flow_bijector)
+print(model)
 
 # build model
-data_ph = tf.placeholder(tf.float32, shape=[args.batch_size, 81, 9])
-log_likelihood = model.log_prob(tf.nn.softmax(data_ph))
-sample = tf.reshape(model.sample(), [args.batch_size, 9, 9, 9])
-global_step = tf.train.get_or_create_global_step()
-learning_rate = tf.train.cosine_decay(args.learning_rate, global_step,
-                                      args.epochs * batches_per_epoch)
-optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+data_ph = tf.placeholder(tf.float32, shape=[args.batch_size, 784])
+log_likelihood = model.log_prob(data_ph)
+sample = tf.reshape(model.sample(), [args.batch_size, 28, 28])
+optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
 train_op = optimizer.minimize(-log_likelihood)
 
 verbose_ops_dict = dict()
@@ -78,13 +101,16 @@ with tf.Session(config=config) as session:
 
         mean_nll = np.mean(out_dict['nll'])
 
-        bits_per_dim = -mean_nll / (
+        bits_per_dim = mean_nll / (
             np.log(2.) * reduce(operator.mul, data_shape[1:]))
         print("bits per dim: {:7.5f}\tnll: {:7.5f}".format(
             bits_per_dim, mean_nll))
 
-        #generated_img = session.run(sample_img)
-        #for i in range(generated_img.shape[0]):
-        #    scipy.misc.toimage(generated_img[i]).save('epoch{}_{}.jpg'.format(epoch, i))
+        generated_img = session.run(sample)
+        print(np.min(generated_img))
+        print(np.max(generated_img))
+        for i in range(generated_img.shape[0]):
+            scipy.misc.toimage(generated_img[i]).save('epoch{}_{}.jpg'.format(
+                epoch, i))
         sample_val = session.run(sample)
         np.save('attempted_sudoku_epoch{}'.format(epoch), sample_val)
