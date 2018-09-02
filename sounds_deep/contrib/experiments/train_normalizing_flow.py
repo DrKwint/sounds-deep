@@ -36,35 +36,33 @@ train_gen = data.data_generator(train_data, args.batch_size)
 def fnfn(i):
     def _fn(x, output_units):
         first = snt.Linear(512)
-        net = snt.Sequential(
-            [first, tf.nn.relu, snt.Linear(512), tf.nn.relu,
+        net = snt.Sequential([
+            first, tf.nn.relu,
+            snt.Linear(512), tf.nn.relu,
             snt.Linear(
                 output_units * 2,
                 initializers={
                     'w': tf.initializers.zeros(),
                     'b': tf.initializers.zeros()
-                }), lambda x: tf.split(x, 2, axis=-1)])
+                }), lambda x: tf.split(x, 2, axis=-1)
+        ])
         shift, log_scale = net(x)
         # log_scale = tf.Print(log_scale, [tf.reduce_mean(x), tf.reduce_mean(first._w), tf.reduce_sum(log_scale, axis=-1)], message="{}: ".format(i))
         return shift, log_scale
     return tf.make_template("real_nvp_default_template", _fn)
 
+def flow_step():
+    bijectors = []
+    bijectors.append(tfb.BatchNormalization())
+    bijectors.append(tfb.Permute(permutation=list(reversed(range(784)))))
+    bijectors.append(
+        tfb.RealNVP(num_masked=784 // 2, shift_and_log_scale_fn=fnfn(i)))
+    return tfb.Chain(bijectors)
+
 bijectors = []
 num_bijectors = 32
 for i in range(num_bijectors):
-    #if i % 32 == 0:
-    #    bijectors.append(tfb.BatchNormalization())
-    if i > 0:
-        # permutation = list(range(784))
-        # shuffle(permutation)
-        bijectors.append(tfb.Permute(permutation=list(reversed(range(784)))))
-    bijectors.append(
-        tfb.RealNVP(
-            num_masked=784 // 2,
-            shift_and_log_scale_fn=fnfn(i)))
-    # if i < num_bijectors - 1:
-# bijectors.append(tfb.BatchNormalization())
-
+    bijectors.append(flow_step())
 flow_bijector = tfb.Chain(bijectors)
 
 model = tfd.TransformedDistribution(
@@ -113,4 +111,3 @@ with tf.Session(config=config) as session:
             scipy.misc.toimage(generated_img[i]).save('epoch{}_{}.jpg'.format(
                 epoch, i))
         sample_val = session.run(sample)
-        np.save('attempted_sudoku_epoch{}'.format(epoch), sample_val)
