@@ -77,7 +77,14 @@ def int_shape(x):
     if str(x.get_shape()[0]) != '?':
         return list(map(int, x.get_shape()))
     return [-1] + list(map(int, x.get_shape()[1:]))
-
+    
+def flatten_sum(logps):
+    if len(logps.get_shape()) == 2:
+        return tf.reduce_sum(logps, [1])
+    elif len(logps.get_shape()) == 4:
+        return tf.reduce_sum(logps, [1, 2, 3])
+    else:
+        raise Exception()
 
 def shuffle_features(name,
                      h,
