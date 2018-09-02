@@ -55,6 +55,7 @@ class NamedLatentVAE(snt.AbstractModule):
         self.nv_latent_posterior = tfd.ExpRelaxedOneHotCategorical(
             temperature, logits=nv_logits)
         nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
+        self.nv_latent_posterior_sample = nv_latent_posterior_sample
         nv_labeled_posterior_sample = self.nv_labeled_latent_posterior.sample(n_samples)
         nv_predicted = tf.concat(
             [
