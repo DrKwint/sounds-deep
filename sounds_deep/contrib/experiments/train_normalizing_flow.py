@@ -26,7 +26,7 @@ args = parser.parse_args()
 # load the data
 # train_data, _, _, _ = data.load_cifar10('./data/')
 train_data, _, _, _ = data.load_mnist('./data/')
-# train_data = np.reshape(train_data, [-1, 28, 28, 1])
+train_data = np.reshape(train_data, [-1, 28, 28, 1])
 # train_data, _, _, _ = data.load_sudoku('./data')
 train_data = train_data.astype(np.float32)
 data_shape = (args.batch_size, ) + train_data.shape[1:]

@@ -6,7 +6,7 @@ def actnorm(name,
             x,
             scale=1.,
             logdet=None,
-            logscale_factor=3.,
+            logscale_factor=1.,
             batch_variance=False,
             reverse=False,
             init=False,
@@ -54,7 +54,7 @@ def actnorm_scale(name,
                   scale=1.,
                   logdet=None,
                   logscale_factor=3.,
-                  batch_variance=False,
+                  batch_variance=True,
                   reverse=False,
                   init=False,
                   trainable=True):
@@ -79,6 +79,7 @@ def actnorm_scale(name,
         initial_value=tf.log(scale / (tf.sqrt(x_var) + 1e-6)) /
         logscale_factor) * logscale_factor
     if not reverse:
+        # logs = tf.Print(logs, [tf.exp(logs)], "actnorm scale: ")
         x = x * tf.exp(logs)
     else:
         x = x * tf.exp(-logs)
@@ -87,6 +88,7 @@ def actnorm_scale(name,
         dlogdet = tf.reduce_sum(logs) * logdet_factor
         if reverse:
             dlogdet *= -1
+        # dlogdet = tf.Print(dlogdet, [dlogdet], "actnorm dlogdet: ")
         return x, logdet + dlogdet
 
     return x

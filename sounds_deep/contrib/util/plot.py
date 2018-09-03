@@ -12,3 +12,4 @@ def plot(filename, image_data, rows, cols):
     except IndexError:
         pass
     f.savefig(filename)
+    plt.close(f)

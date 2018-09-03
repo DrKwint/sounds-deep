@@ -14,14 +14,15 @@ from random import shuffle
 
 import sounds_deep.contrib.data.data as data
 import sounds_deep.contrib.util.util as util
+import sounds_deep.contrib.util.plot as plot
 from sounds_deep.contrib.models.normalizing_flows import GlowFlow
 from sounds_deep.contrib.models.normalizing_flows import NormalizingFlows
 from sounds_deep.contrib.models.normalizing_flows import glow_net_fn
 
 parser = argparse.ArgumentParser(description='Train a Glow model.')
-parser.add_argument('--batch_size', type=int, default=64)
+parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--epochs', type=int, default=100)
-parser.add_argument('--learning_rate', type=float, default=5e-6)
+parser.add_argument('--learning_rate', type=float, default=0.001)
 args = parser.parse_args()
 
 # load the data
@@ -43,13 +44,17 @@ def feed_dict_fn():
 data_ph = tf.placeholder(tf.float32, shape=data_shape)
 label_ph = tf.placeholder(tf.float32, shape=label_shape)
 
-glow = GlowFlow(1, 16, glow_net_fn, flow_coupling_type='scale_and_shift')
+glow = GlowFlow(2, 8, glow_net_fn, flow_coupling_type='scale_and_shift')
 model = NormalizingFlows(glow)
 
 objective, stats_dict = model(data_ph, label_ph)
 
 optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
 train_op = optimizer.minimize(objective)
+
+# setup sampling
+sample_label_ph = tf.placeholder(tf.int32, shape=(16))
+sample = model.sample(tf.one_hot(sample_label_ph, 10))
 
 verbose_ops_dict = stats_dict
 verbose_ops_dict['objective'] = objective
@@ -62,7 +67,7 @@ with tf.Session(config=config) as session:
         print("EPOCH {}".format(epoch))
         out_dict = util.run_epoch_ops(
             session,
-            train_data.shape[0] // args.batch_size,
+            10, #train_data.shape[0] // args.batch_size,
             verbose_ops_dict=verbose_ops_dict,
             silent_ops=[train_op],
             feed_dict_fn=feed_dict_fn,
@@ -70,3 +75,7 @@ with tf.Session(config=config) as session:
 
         mean_objective = np.mean(out_dict['objective'])
         print("objective: {:7.5f}".format(mean_objective))
+
+        for i in range(10):
+            sample_val = session.run(sample, feed_dict={sample_label_ph: np.ones(16)*i})
+            plot.plot('epoch{}_class{}.png'.format(epoch, i), np.squeeze(sample_val), 4, 4)
