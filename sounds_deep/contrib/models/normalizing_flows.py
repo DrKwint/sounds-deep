@@ -7,6 +7,7 @@ from sounds_deep.contrib.util.actnorm import actnorm
 from sounds_deep.contrib.util.scaling import squeeze2d, unsqueeze2d
 
 tfd = tf.contrib.distributions
+LOGSCALE_FACTOR = 0.01
 
 def conv2d_zeros(name,
                  x,
@@ -14,7 +15,7 @@ def conv2d_zeros(name,
                  filter_size=[3, 3],
                  stride=[1, 1],
                  pad="SAME",
-                 logscale_factor=3):
+                 logscale_factor=LOGSCALE_FACTOR):
     with tf.variable_scope(name):
         n_in = int(x.get_shape()[3])
         stride_shape = [1] + stride + [1]
@@ -31,7 +32,7 @@ def conv2d_zeros(name,
     return x
 
 
-def linear_zeros(name, x, width, logscale_factor=3):
+def linear_zeros(name, x, width, logscale_factor=LOGSCALE_FACTOR):
     with tf.variable_scope(name):
         n_in = int(x.get_shape()[1])
         w = tf.get_variable(
@@ -98,7 +99,7 @@ class Invertible1x1Conv(snt.AbstractModule):
             z = tf.nn.conv2d(z, _w, [1, 1, 1, 1], 'SAME', data_format='NHWC')
             logdet += dlogdet
         else:
-            _w = tf.matrix_inverse(w + tf.eye(shape[3])*1e-2)
+            _w = tf.matrix_inverse(w)# + tf.eye(shape[3])*1e-2)
             _w = tf.reshape(_w, [1, 1] + w_shape)
             z = tf.nn.conv2d(z, _w, [1, 1, 1, 1], 'SAME', data_format='NHWC')
             logdet -= dlogdet
@@ -265,7 +266,7 @@ class RevNet(snt.AbstractModule):
         for step in local_steps:
             z, logdet = step(z, logdet, reverse=reverse)
         
-        z = tf.Print(z, [z], "z: ")
+        # z = tf.Print(z, [z], "z: ")
         # logdet = tf.Print(logdet, [logdet], "logdet: ")
         return z, logdet
 
@@ -322,7 +323,7 @@ class NormalizingFlows(snt.AbstractModule):
                 tf.floor((x + .5) * n_bins) * (256. / n_bins), 0, 255),
             'uint8')
 
-    def _prior(self, y_onehot, top_shape, learn_top=False, ycond=False):
+    def _prior(self, y_onehot, top_shape, learn_top=True, ycond=True):
         n_z = top_shape[-1]
 
         h = tf.zeros([tf.shape(y_onehot)[0]] + top_shape[:2] + [2 * n_z])
@@ -354,7 +355,7 @@ class NormalizingFlows(snt.AbstractModule):
         self.top_shape = int_shape(z)[1:]
         pz = self._prior(y_onehot, self.top_shape)
         objective += pz.log_prob(z)
-        objective = tf.Print(objective, [pz.log_prob(z)], "prior_log_prob: ")
+        # objective = tf.Print(objective, [pz.log_prob(z)], "prior_log_prob: ")
 
         # Generative loss
         nobj = -objective
@@ -396,6 +397,6 @@ class NormalizingFlows(snt.AbstractModule):
         logdet = pz.log_prob(z)
         z = self.flow(z, logdet, reverse=True)
         z = unsqueeze2d(z, 2)  # 8x8x12 -> 16x16x3
-        z = tf.Print(z, [tf.reduce_max(z)])
+        z = tf.Print(z, [tf.reduce_max(z), tf.reduce_mean(z)])
         x = self._postprocess(z, n_bins)
         return x

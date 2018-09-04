@@ -2,11 +2,13 @@ import tensorflow as tf
 
 from sounds_deep.contrib.util.util import int_shape
 
+LOGSCALE_FACTOR = 0.01
+
 def actnorm(name,
             x,
             scale=1.,
             logdet=None,
-            logscale_factor=1.,
+            logscale_factor=LOGSCALE_FACTOR,
             batch_variance=False,
             reverse=False,
             init=False,
