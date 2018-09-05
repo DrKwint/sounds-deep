@@ -11,14 +11,16 @@ def run_epoch_ops(session,
                   verbose=False):
     """
     Args:
-        session (tf.Session): Session containing the operations passed in `verbose_ops_dict` and `silent_ops`
+        session (tf.Session): Session with tf.Graph containing the operations
+            passed in `verbose_ops_dict` and `silent_ops`
         steps_per_epoch (int): number of times to run operations
-        verbose_ops_dict (dict): strings to tf operations whose values will be returned
+        verbose_ops_dict (dict): strings to tf operations whose values will be
+            returned
         feed_dict_fn (callable): called to retrieve the feed_dict
-                                   (dict of placeholders to np arrays)
+            (dict of tf.placeholder to np.array)
         verbose (bool): whether to use tqdm progressbar on stdout
     Return:
-        dict of str to numpy arrays or floats
+        dict of str to np.array parallel to the verbose_ops_dict
     """
     verbose_vals = {k: [] for k, v in verbose_ops_dict.items()}
     if verbose:
@@ -29,13 +31,12 @@ def run_epoch_ops(session,
     for step in iterable:
         out = session.run(
             [silent_ops, verbose_ops_dict], feed_dict=feed_dict_fn())[1]
-        verbose_vals = {k: v + [out[k]] for k, v in verbose_vals.items()}
+        verbose_vals = {k: v + [np.array(out[k])] for k, v in verbose_vals.items()}
 
     return {
         k: np.concatenate(v) if v[0].shape != () else np.array(v)
         for k, v in verbose_vals.items()
     }
-
 
 def logdet(A, name='logdet'):
     """
@@ -57,7 +58,6 @@ def logdet(A, name='logdet'):
                 tf.log(tf.matrix_diag_part(tf.cholesky(A))), axis=-1),
             name='logdet')
 
-
 def matrix_is_pos_def_op(A):
     eigvals = tf.self_adjoint_eig(
         tf.divide(A + tf.matrix_transpose(A), 2., name='symmetrised'))[0]
@@ -77,7 +77,14 @@ def int_shape(x):
     if str(x.get_shape()[0]) != '?':
         return list(map(int, x.get_shape()))
     return [-1] + list(map(int, x.get_shape()[1:]))
-
+    
+def flatten_sum(logps):
+    if len(logps.get_shape()) == 2:
+        return tf.reduce_sum(logps, [1])
+    elif len(logps.get_shape()) == 4:
+        return tf.reduce_sum(logps, [1, 2, 3])
+    else:
+        raise Exception()
 
 def shuffle_features(name,
                      h,

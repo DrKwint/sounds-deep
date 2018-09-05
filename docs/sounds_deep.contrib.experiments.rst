@@ -6,7 +6,9 @@ Submodules
 
 .. toctree::
 
+   sounds_deep.contrib.experiments.train_hvae
    sounds_deep.contrib.experiments.train_normalizing_flow
+   sounds_deep.contrib.experiments.train_nvvae
    sounds_deep.contrib.experiments.train_svae
    sounds_deep.contrib.experiments.train_vae
 
