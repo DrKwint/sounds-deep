@@ -34,7 +34,7 @@ args = parser.parse_args()
 # sampled img save directory
 if args.output_dir == '' and 'SLURM_JOB_ID' in os.environ.keys():
     job_id = os.environ['SLURM_JOB_ID']
-    output_directory = 'glow_{}'.format(job_id)
+    output_directory = 'nvvae_{}'.format(job_id)
 else:
     output_directory = args.output_dir
 
