@@ -42,6 +42,7 @@ class NamedLatentVAE(snt.AbstractModule):
                labeled_input,
                hvar_labels,
                temperature,
+               classification_loss_coeff=0.8,
                n_samples=1,
                analytic_kl=True):
         """data must be NHWC"""
@@ -108,7 +109,7 @@ class NamedLatentVAE(snt.AbstractModule):
         supervised_local_elbo = -(supervised_distortion + supervised_rate)
         unsupervised_local_elbo = -(unsupervised_distortion + unsupervised_rate + nv_entropy)
 
-        elbo_local = supervised_local_elbo + unsupervised_local_elbo + 0.8 * nv_log_prob
+        elbo_local = supervised_local_elbo + unsupervised_local_elbo + classification_loss_coeff * nv_log_prob
 
         self.distortion = distortion
         self.rate = rate

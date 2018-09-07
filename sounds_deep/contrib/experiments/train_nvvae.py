@@ -19,10 +19,12 @@ import sounds_deep.contrib.util.scaling as scaling
 import sounds_deep.contrib.util.util as util
 
 parser = argparse.ArgumentParser(description='Train a VAE model.')
+parser.add_argument('--temperature', type=float, default=0.5)
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--num_labeled_data', type=int, default=100)
 parser.add_argument('--labeled_batch_size', type=int, default=32)
 parser.add_argument('--latent_dimension', type=int, default=32)
+parser.add_argument('--classification_loss_coeff', type=float, default=0.8)
 parser.add_argument('--epochs', type=int, default=500)
 parser.add_argument('--learning_rate', type=float, default=3e-5)
 parser.add_argument('--dataset', type=str, default='mnist')
@@ -139,6 +141,7 @@ model(
     labeled_data_ph,
     label_ph,
     temperature_ph,
+    classification_loss_coeff=args.classification_loss_coeff,
     analytic_kl=True)
 
 num_samples = 16
@@ -174,7 +177,7 @@ config.gpu_options.allow_growth = True
 with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     for epoch in range(args.epochs):
-        temperature = 0.5
+        temperature = args.temperature
         print("Temperature: {}".format(temperature))
 
         def feed_dict_fn():
