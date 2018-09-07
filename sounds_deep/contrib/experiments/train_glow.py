@@ -20,9 +20,11 @@ from sounds_deep.contrib.models.normalizing_flows import NormalizingFlows
 from sounds_deep.contrib.models.normalizing_flows import glow_net_fn
 
 parser = argparse.ArgumentParser(description='Train a Glow model.')
-parser.add_argument('--batch_size', type=int, default=256)
+parser.add_argument('--batch_size', type=int, default=512)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--epochs', type=int, default=500)
+parser.add_argument('--levels', type=int, default=3)
+parser.add_argument('--depth_per_level', type=int, default=16)
 # logscale factor for actnorm: 0.1 works well, must be <3
 args = parser.parse_args()
 
@@ -46,7 +48,7 @@ def feed_dict_fn():
 data_ph = tf.placeholder(tf.float32, shape=data_shape)
 label_ph = tf.placeholder(tf.float32, shape=label_shape)
 
-glow = GlowFlow(2, 16, glow_net_fn, flow_coupling_type='scale_and_shift')
+glow = GlowFlow(args.levels, args.depth_per_level, glow_net_fn, flow_coupling_type='scale_and_shift')
 model = NormalizingFlows(glow)
 
 objective, stats_dict = model(data_ph, label_ph)
