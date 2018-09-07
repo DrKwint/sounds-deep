@@ -1,23 +1,22 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import argparse
 import operator
+import os
 from functools import reduce
-
-import numpy as np
-import sonnet as snt
-import tensorflow as tf
-import scipy.misc
 from random import shuffle
 
+import numpy as np
+import scipy.misc
+import sonnet as snt
+import tensorflow as tf
+
 import sounds_deep.contrib.data.data as data
-import sounds_deep.contrib.util.util as util
 import sounds_deep.contrib.util.plot as plot
-from sounds_deep.contrib.models.normalizing_flows import GlowFlow
-from sounds_deep.contrib.models.normalizing_flows import NormalizingFlows
-from sounds_deep.contrib.models.normalizing_flows import glow_net_fn
+import sounds_deep.contrib.util.util as util
+from sounds_deep.contrib.models.normalizing_flows import (GlowFlow,
+                                                          NormalizingFlows,
+                                                          glow_net_fn)
 
 parser = argparse.ArgumentParser(description='Train a Glow model.')
 parser.add_argument('--batch_size', type=int, default=512)
@@ -25,8 +24,16 @@ parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--epochs', type=int, default=500)
 parser.add_argument('--levels', type=int, default=3)
 parser.add_argument('--depth_per_level', type=int, default=16)
+parser.add_argument('--output_dir', type=str, default='')
 # logscale factor for actnorm: 0.1 works well, must be <3
 args = parser.parse_args()
+
+# sampled img save directory
+if args.output_dir == '' and 'SLURM_JOB_ID' in os.environ.keys():
+    job_id = os.environ['SLURM_JOB_ID']
+    output_directory = 'glow_{}'.format(job_id)
+else:
+    output_directory = args.output_dir
 
 # load the data
 train_data, train_labels, _, _ = data.load_mnist('./data/')
@@ -35,7 +42,9 @@ train_data = np.reshape(train_data, [-1, 28, 28, 1])
 data_shape = (args.batch_size, ) + train_data.shape[1:]
 label_shape = (args.batch_size, ) + train_labels.shape[1:]
 batches_per_epoch = train_data.shape[0] // args.batch_size
-train_gen = data.parallel_data_generator([train_data, train_labels], args.batch_size)
+train_gen = data.parallel_data_generator([train_data, train_labels],
+                                         args.batch_size)
+
 
 def feed_dict_fn():
     feed_dict = dict()
@@ -44,11 +53,16 @@ def feed_dict_fn():
     feed_dict[label_ph] = arrays[1]
     return feed_dict
 
+
 # build model
 data_ph = tf.placeholder(tf.float32, shape=data_shape)
 label_ph = tf.placeholder(tf.float32, shape=label_shape)
 
-glow = GlowFlow(args.levels, args.depth_per_level, glow_net_fn, flow_coupling_type='scale_and_shift')
+glow = GlowFlow(
+    args.levels,
+    args.depth_per_level,
+    glow_net_fn,
+    flow_coupling_type='scale_and_shift')
 model = NormalizingFlows(glow)
 
 objective, stats_dict = model(data_ph, label_ph)
@@ -81,5 +95,8 @@ with tf.Session(config=config) as session:
         print("objective: {:7.5f}".format(mean_objective))
 
         for i in range(10):
-            sample_val = session.run(sample, feed_dict={sample_label_ph: np.ones(16)*i})
-            plot.plot('epoch{}_class{}.png'.format(epoch, i), np.squeeze(sample_val), 4, 4)
+            sample_val = session.run(
+                sample, feed_dict={sample_label_ph: np.ones(16) * i})
+            filename = os.path.join(output_directory,
+                                    'epoch{}_class{}.png'.format(epoch, i))
+            plot.plot(filename, np.squeeze(sample_val), 4, 4)

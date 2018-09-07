@@ -1,32 +1,40 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import argparse
 import operator
+import os
 from functools import reduce
 
 import numpy as np
+import scipy
 import sonnet as snt
 import tensorflow as tf
-import scipy
 
 import sounds_deep.contrib.data.data as data
-import sounds_deep.contrib.util.scaling as scaling
-import sounds_deep.contrib.util.util as util
-import sounds_deep.contrib.models.vae as vae
 import sounds_deep.contrib.models.nvvae as nvvae
+import sounds_deep.contrib.models.vae as vae
 import sounds_deep.contrib.parameterized_distributions.discretized_logistic as discretized_logistic
 import sounds_deep.contrib.util.plot as plot
+import sounds_deep.contrib.util.scaling as scaling
+import sounds_deep.contrib.util.util as util
 
 parser = argparse.ArgumentParser(description='Train a VAE model.')
 parser.add_argument('--batch_size', type=int, default=32)
+parser.add_argument('--num_labeled_data', type=int, default=100)
 parser.add_argument('--labeled_batch_size', type=int, default=32)
 parser.add_argument('--latent_dimension', type=int, default=32)
 parser.add_argument('--epochs', type=int, default=500)
 parser.add_argument('--learning_rate', type=float, default=3e-5)
 parser.add_argument('--dataset', type=str, default='mnist')
+parser.add_argument('--output_dir', type=str, default='')
 args = parser.parse_args()
+
+# sampled img save directory
+if args.output_dir == '' and 'SLURM_JOB_ID' in os.environ.keys():
+    job_id = os.environ['SLURM_JOB_ID']
+    output_directory = 'glow_{}'.format(job_id)
+else:
+    output_directory = args.output_dir
 
 
 def apply_temp(a, temperature=1.0):
@@ -34,6 +42,7 @@ def apply_temp(a, temperature=1.0):
     a = tf.log(a) / temperature
     a = tf.exp(a) / tf.reduce_sum(tf.exp(a), axis=1, keepdims=True)
     return a
+
 
 def unison_shuffled_copies(arrays):
     assert all([len(a) == len(arrays[0]) for a in arrays])
@@ -53,11 +62,12 @@ label_shape = (args.batch_size, ) + train_labels.shape[1:]
 batches_per_epoch = train_data.shape[0] // args.batch_size
 
 train_data, train_labels = unison_shuffled_copies([train_data, train_labels])
-labeled_train_data = train_data[:100]
-labeled_train_labels = train_labels[:100]
-labeled_train_gen = data.parallel_data_generator([labeled_train_data, labeled_train_labels],
-                                         args.labeled_batch_size)
-unlabeled_train_gen = data.parallel_data_generator([train_data, train_labels], args.batch_size)
+labeled_train_data = train_data[:args.num_labeled_data]
+labeled_train_labels = train_labels[:args.num_labeled_data]
+labeled_train_gen = data.parallel_data_generator(
+    [labeled_train_data, labeled_train_labels], args.labeled_batch_size)
+unlabeled_train_gen = data.parallel_data_generator([train_data, train_labels],
+                                                   args.batch_size)
 
 # build the model
 if args.dataset == 'cifar10':
@@ -138,9 +148,11 @@ sample = model.sample(
     sample_shape=[num_samples],
     temperature=temperature_ph,
     nv_prior_sample=nv_sample_ph)
-classification_rate = tf.count_nonzero(tf.equal(
+classification_rate = tf.count_nonzero(
+    tf.equal(
         tf.argmax(tf.squeeze(model.nv_latent_posterior_sample), axis=1),
-        tf.argmax(unlabeled_label_ph, axis=1)), dtype=tf.float32) / args.batch_size
+        tf.argmax(unlabeled_label_ph, axis=1)),
+    dtype=tf.float32) / args.batch_size
 
 optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
 train_op = optimizer.minimize(-model.elbo)
@@ -212,5 +224,6 @@ with tf.Session(config=config) as session:
                     temperature_ph: temp,
                     nv_sample_ph: nv_sample_val
                 })
-                plot.plot('epoch{}_class{}_temp{}.png'.format(epoch, c, temp),
-                          np.squeeze(generated_img), 4, 4)
+                filename = os.path.join(output_directory,
+                                        'epoch{}_class{}.png'.format(epoch, i))
+                plot.plot(filename, np.squeeze(generated_img), 4, 4)

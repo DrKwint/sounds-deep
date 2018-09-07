@@ -106,7 +106,7 @@ class NamedLatentVAE(snt.AbstractModule):
         nv_log_prob = tf.reduce_sum(hvar_labels * nv_labeled_posterior_sample, axis=-1)
 
         supervised_local_elbo = -(supervised_distortion + supervised_rate)
-        unsupervised_local_elbo = -(unsupervised_distortion + unsupervised_rate) + nv_entropy
+        unsupervised_local_elbo = -(unsupervised_distortion + unsupervised_rate + nv_entropy)
 
         elbo_local = supervised_local_elbo + unsupervised_local_elbo + 0.8 * nv_log_prob
 
