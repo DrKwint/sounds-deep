@@ -40,8 +40,13 @@ else:
 if args.output_dir == '' and 'SLURM_JOB_ID' in os.environ.keys():
     job_id = os.environ['SLURM_JOB_ID']
     output_directory = 'glow_{}'.format(job_id)
+    os.mkdir(output_directory)
 else:
-    output_directory = args.output_dir
+    if args.output_dir == '':
+        args.output_dir = './'
+    else:
+        output_directory = args.output_dir
+        os.mkdir(output_directory)
 
 # load the data
 train_data, train_labels, _, _ = data.load_mnist('./data/')

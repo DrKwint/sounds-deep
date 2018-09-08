@@ -35,8 +35,13 @@ args = parser.parse_args()
 if args.output_dir == '' and 'SLURM_JOB_ID' in os.environ.keys():
     job_id = os.environ['SLURM_JOB_ID']
     output_directory = 'nvvae_{}'.format(job_id)
+    os.mkdir(output_directory)
 else:
-    output_directory = args.output_dir
+    if args.output_dir == '':
+        args.output_dir = './'
+    else:
+        output_directory = args.output_dir
+        os.mkdir(output_directory)
 
 
 def apply_temp(a, temperature=1.0):
