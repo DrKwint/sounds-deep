@@ -20,6 +20,7 @@ from sounds_deep.contrib.models.normalizing_flows import (GlowFlow,
                                                           glow_net_fn)
 
 parser = argparse.ArgumentParser(description='Train a Glow model.')
+parser.add_argument('--dataset', type=str, default='mnist')
 parser.add_argument('--batch_size', type=int, default=512)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--epochs', type=int, default=500)
@@ -49,12 +50,17 @@ else:
         os.mkdir(output_directory)
 
 # load the data
-train_data, train_labels, _, _ = data.load_mnist('./data/')
-train_data *= 255
-train_data = np.reshape(train_data, [-1, 28, 28, 1])
+if args.dataset == 'cifar10':
+    train_data, train_labels, _, _ = data.load_cifar10('./data/')
+    train_data *= 255
+elif args.dataset == 'mnist':
+    train_data, train_labels, test_data, test_labels = data.load_mnist(
+        './data/')
+    train_data *= 255
+    train_data = np.reshape(train_data, [-1, 28, 28, 1])
 data_shape = (args.batch_size, ) + train_data.shape[1:]
 label_shape = (args.batch_size, ) + train_labels.shape[1:]
-batches_per_epoch = train_data.shape[0] // args.batch_size
+batches_per_epoch = train_data.shape[0] // (args.batch_size * args.num_gpus)
 train_gen = data.parallel_data_generator([train_data, train_labels],
                                          args.batch_size)
 
@@ -109,7 +115,7 @@ with tf.Session(config=config) as session:
         print("EPOCH {}".format(epoch))
         out_dict = util.run_epoch_ops(
             session,
-            train_data.shape[0] // args.batch_size,
+            batches_per_epoch,
             verbose_ops_dict=verbose_ops_dict,
             silent_ops=[train_op],
             feed_dict_fn=feed_dict_fn,
