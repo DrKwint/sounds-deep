@@ -1,3 +1,4 @@
+"""Train a Glow normalizing flows model. TODO: fix stats dicts from towers """
 from __future__ import absolute_import, division, print_function
 
 import argparse
@@ -22,11 +23,18 @@ parser = argparse.ArgumentParser(description='Train a Glow model.')
 parser.add_argument('--batch_size', type=int, default=512)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--epochs', type=int, default=500)
-parser.add_argument('--levels', type=int, default=3)
+parser.add_argument('--levels', type=int, default=2)
 parser.add_argument('--depth_per_level', type=int, default=16)
 parser.add_argument('--output_dir', type=str, default='')
+parser.add_argument('--num_gpus', type=int, default=1)
 # logscale factor for actnorm: 0.1 works well, must be <3
 args = parser.parse_args()
+
+if args.num_gpus > 0:
+    device_string = 'gpu'
+else:
+    device_string = 'cpu'
+    args.num_gpus = 1
 
 # sampled img save directory
 if args.output_dir == '' and 'SLURM_JOB_ID' in os.environ.keys():
@@ -45,30 +53,41 @@ batches_per_epoch = train_data.shape[0] // args.batch_size
 train_gen = data.parallel_data_generator([train_data, train_labels],
                                          args.batch_size)
 
-
-def feed_dict_fn():
-    feed_dict = dict()
-    arrays = next(train_gen)
-    feed_dict[data_ph] = arrays[0]
-    feed_dict[label_ph] = arrays[1]
-    return feed_dict
-
-
 # build model
-data_ph = tf.placeholder(tf.float32, shape=data_shape)
-label_ph = tf.placeholder(tf.float32, shape=label_shape)
-
 glow = GlowFlow(
     args.levels,
     args.depth_per_level,
     glow_net_fn,
     flow_coupling_type='scale_and_shift')
 model = NormalizingFlows(glow)
-
-objective, stats_dict = model(data_ph, label_ph)
-
 optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-train_op = optimizer.minimize(objective)
+
+data_ph_list = []
+label_ph_list = []
+objective_list = []
+stats_dict_list = []
+with tf.variable_scope(tf.get_variable_scope()):
+    for i in range(args.num_gpus):
+        with tf.device('/%s:%d' % (device_string, i)):
+            with tf.name_scope('tower_%d' % i) as scope:
+                data_ph = tf.placeholder(tf.float32, shape=data_shape)
+                label_ph = tf.placeholder(tf.float32, shape=label_shape)
+                objective, stats_dict = model(data_ph, label_ph)
+                data_ph_list.append(data_ph)
+                label_ph_list.append(label_ph)
+                objective_list.append(objective)
+                stats_dict_list.append(stats_dict)
+
+average_grads = util.average_gradients([optimizer.compute_gradients(obj) for obj in objective_list])
+train_op = optimizer.apply_gradients(average_grads)
+
+def feed_dict_fn():
+    feed_dict = dict()
+    for data_ph, label_ph in zip(data_ph_list, label_ph_list):
+        arrays = next(train_gen)
+        feed_dict[data_ph] = arrays[0]
+        feed_dict[label_ph] = arrays[1]
+    return feed_dict
 
 # setup sampling
 sample_label_ph = tf.placeholder(tf.int32, shape=(16))
