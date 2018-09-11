@@ -227,11 +227,11 @@ with tf.Session(config=config) as session:
         for temp in [0.01, 0.5]:
             for c in range(10):
                 nv_sample_val = np.zeros([num_samples, 10], dtype=float)
-                nv_sample_val[c] = 1.
+                nv_sample_val[:, c] = 1.
                 generated_img = session.run(sample, {
                     temperature_ph: temp,
                     nv_sample_ph: nv_sample_val
                 })
                 filename = os.path.join(output_directory,
-                                        'epoch{}_class{}.png'.format(epoch, i))
+                                        'epoch{}_class{}.png'.format(epoch, c))
                 plot.plot(filename, np.squeeze(generated_img), 4, 4)
