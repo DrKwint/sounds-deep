@@ -119,23 +119,23 @@ elif args.dataset == 'mnist':
     ])
     output_distribution_fn = vae.BERNOULLI_FN
 
+temperature_ph = tf.placeholder(tf.float32)
 model = M2_module.M2(
     z_shape=args.z_shape,
     y_shape=10,
     z_net=z_encoder_module,
     y_net=y_encoder_module,
     x_hat_net=x_hat_decoder_module,
-    y_prior_temperature=0.5,
+    y_prior_temperature=temperature_ph,
     x_hat_dist_fn=output_distribution_fn)
 
 # build model
-temperature_ph = tf.placeholder(tf.float32)
 labeled_data_ph = tf.placeholder(tf.float32, shape=(None, ) + data_shape)
 unlabeled_data_ph = tf.placeholder(tf.float32, shape=(None, ) + data_shape)
 label_ph = tf.placeholder(tf.float32, shape=(None, ) + label_shape)
 # used exclusively to calculate classification rate
 unlabeled_label_ph = tf.placeholder(tf.float32, shape=(None, ) + label_shape)
-loss, stats_dict = model(
+elbo, stats_dict = model(
     unlabeled_data_ph,
     labeled_data_ph,
     label_ph,
@@ -147,8 +147,6 @@ nv_sample_ph = tf.placeholder_with_default(
     tf.ones([num_samples, 10]), [num_samples, 10])
 sample = model.sample(sample_shape=[num_samples], y_value=nv_sample_ph)
 
-#temperature=temperature_ph,
-#nv_prior_sample=nv_sample_ph)
 classification_rate = tf.count_nonzero(
     tf.equal(
         tf.argmax(stats_dict['y_sample_unlabeled'], axis=2),
@@ -156,7 +154,7 @@ classification_rate = tf.count_nonzero(
     dtype=tf.float32) / args.unlabeled_batch_size
 
 optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-train_op = optimizer.minimize(loss)
+train_op = optimizer.minimize(-elbo)
 
 verbose_ops_dict = dict(stats_dict)
 del verbose_ops_dict['y_sample_unlabeled']
@@ -196,7 +194,7 @@ with tf.Session(config=config) as session:
         print("TRAIN")
         out_dict = util.run_epoch_ops(
             session,
-            train_batches_per_epoch,
+            20, #train_batches_per_epoch,
             verbose_ops_dict=verbose_ops_dict,
             silent_ops=[train_op],
             feed_dict_fn=train_feed_dict_fn,
@@ -239,7 +237,7 @@ with tf.Session(config=config) as session:
         print("TEST")
         out_dict = util.run_epoch_ops(
             session,
-            test_batches_per_epoch,
+            2,# test_batches_per_epoch,
             verbose_ops_dict=verbose_ops_dict,
             silent_ops=[],
             feed_dict_fn=test_feed_dict_fn,
@@ -287,5 +285,5 @@ with tf.Session(config=config) as session:
                     nv_sample_ph: nv_sample_val
                 })
                 filename = os.path.join(output_directory,
-                                        'epoch{}_class{}.png'.format(epoch, c))
+                                        'epoch{}_class{}_temp{}.png'.format(epoch, c, temp))
                 plot.plot(filename, np.squeeze(generated_img), 4, 4)

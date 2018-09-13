@@ -142,29 +142,36 @@ class M2(snt.AbstractModule):
         x_hat_unlabeled = self._infer_x_hat(
             tf.exp(y_sample_unlabeled), z_sample_unlabeled)
 
-        supervised_distortion = x_hat_labeled.log_prob(labeled_input)
-        unsupervised_distortion = x_hat_unlabeled.log_prob(unlabeled_input)
+        supervised_distortion = -x_hat_labeled.log_prob(labeled_input)
+        unsupervised_distortion = -x_hat_unlabeled.log_prob(unlabeled_input)
 
-        supervised_rate = (-z_posterior_labeled.log_prob(z_sample_labeled) +
+        supervised_rate = -(-z_posterior_labeled.log_prob(z_sample_labeled) +
                            self.z_prior.log_prob(z_sample_labeled) +
                            self.y_prior.log_prob(hvar_labels))
-        unsupervised_rate = (
+        unsupervised_rate = -(
             -z_posterior_unlabeled.log_prob(z_sample_unlabeled) +
             self.z_prior.log_prob(z_sample_unlabeled) +
             self.y_prior.log_prob(y_sample_unlabeled))
 
-        unsupervised_y_entropy = tfd.Categorical(
+        unsupervised_y_entropy = -tfd.Categorical(
             probs=tf.exp(y_sample_unlabeled)).entropy()
-        supervised_y_log_prob = y_posterior_labeled.log_prob(hvar_labels)
+        supervised_y_log_prob = tf.reduce_mean(
+            y_posterior_labeled.log_prob(hvar_labels), axis=-1)
 
-        supervised_elbo_local = -(supervised_distortion - supervised_rate)
-        supervised_elbo = tf.reduce_logsumexp(supervised_elbo_local, axis=0) - tf.log(tf.to_float(n_samples))
-        unsupervised_elbo_local = -(unsupervised_distortion -
-                              unsupervised_rate) + unsupervised_y_entropy
-        unsupervised_elbo = tf.reduce_logsumexp(unsupervised_elbo_local, axis=0) - tf.log(tf.to_float(n_samples))
+        supervised_elbo_local = -(supervised_distortion + supervised_rate)
+        supervised_elbo = tf.reduce_mean(
+            tf.reduce_logsumexp(supervised_elbo_local, axis=0) - tf.log(
+                tf.to_float(n_samples)),
+            axis=-1)
+        unsupervised_elbo_local = -(unsupervised_distortion +
+                                    unsupervised_rate) + unsupervised_y_entropy
+        unsupervised_elbo = tf.reduce_mean(
+            tf.reduce_logsumexp(unsupervised_elbo_local, axis=0) - tf.log(
+                tf.to_float(n_samples)),
+            axis=-1)
 
-        gain = tf.reduce_mean(supervised_elbo + unsupervised_elbo + (
-            classification_loss_coeff * supervised_y_log_prob))
+        elbo = supervised_elbo + unsupervised_elbo + (
+            classification_loss_coeff * supervised_y_log_prob)
 
         stats_dict = dict()
         stats_dict['y_sample_unlabeled'] = y_sample_unlabeled
@@ -177,7 +184,7 @@ class M2(snt.AbstractModule):
         stats_dict['supervised_y_log_prob'] = supervised_y_log_prob
         stats_dict['unsupervised_y_entropy'] = unsupervised_y_entropy
 
-        return -gain, stats_dict
+        return elbo, stats_dict
 
     def _infer_x_hat(self, y, z):
         """z should be of rank 3 and y should be of rank 2 or 3"""
@@ -217,13 +224,15 @@ class M2(snt.AbstractModule):
         with self._enter_variable_scope():
             with tf.variable_scope(name):
                 if y_value is None:
-                    y_value = tf.exp(self.y_prior.sample(sample_shape, seed, 'y_sample'))
+                    y_value = tf.exp(
+                        self.y_prior.sample(sample_shape, seed, 'y_sample'))
                 if z_value is None:
-                    z_value = self.z_prior.sample(sample_shape, seed, 'z_sample')
+                    z_value = self.z_prior.sample(sample_shape, seed,
+                                                  'z_sample')
                     # this reshape -> conv id -> reshape bullshit is here because
                     # some bug in Sonnet is keeping the output of a tfd distribution
                     # sample from going right to a linear
-                    z_value = tf.reshape(z_value , [-1, 4, 4, 1])
+                    z_value = tf.reshape(z_value, [-1, 4, 4, 1])
                     z_value = tf.layers.conv2d(
                         z_value,
                         1,
@@ -233,5 +242,5 @@ class M2(snt.AbstractModule):
                         padding='same',
                         trainable=False)
                     z_value = tf.reshape(z_value, sample_shape + [-1])
-                
+
                 return self._infer_x_hat(y_value, z_value).mean()
