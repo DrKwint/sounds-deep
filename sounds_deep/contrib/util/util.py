@@ -107,11 +107,8 @@ def positive_definate_initializer(shape, dtype=tf.float32):
     eye = tf.eye(rows, cols, dtype=dtype)
     return vals + eye
 
-
 def int_shape(x):
-    if str(x.get_shape()[0]) != '?':
-        return list(map(int, x.get_shape()))
-    return [-1] + list(map(int, x.get_shape()[1:]))
+    return [-1 if v.value is None else v.value for v in x.get_shape()]
     
 def flatten_sum(logps):
     if len(logps.get_shape()) == 2:

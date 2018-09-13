@@ -1,0 +1,291 @@
+from __future__ import absolute_import, division, print_function
+
+import argparse
+import operator
+import os
+from functools import reduce
+
+import numpy as np
+import scipy
+import sonnet as snt
+import tensorflow as tf
+
+import sounds_deep.contrib.data.data as data
+import sounds_deep.contrib.data.util as data_util
+import sounds_deep.contrib.models.M2 as M2_module
+import sounds_deep.contrib.models.vae as vae
+import sounds_deep.contrib.parameterized_distributions.discretized_logistic as discretized_logistic
+import sounds_deep.contrib.util.plot as plot
+import sounds_deep.contrib.util.scaling as scaling
+import sounds_deep.contrib.util.util as util
+
+parser = argparse.ArgumentParser(
+    description='Train a semi-supervised VAE model.')
+parser.add_argument('--temperature', type=float, default=0.5)
+parser.add_argument('--total_labeled_data', type=int, default=100)
+parser.add_argument('--unlabeled_batch_size', type=int, default=64)
+parser.add_argument('--labeled_batch_size', type=int, default=64)
+parser.add_argument('--z_shape', type=int, default=32)
+parser.add_argument('--classification_loss_coeff', type=float, default=0.8)
+parser.add_argument('--importance_weighting_samples', type=int, default=1)
+parser.add_argument('--epochs', type=int, default=500)
+parser.add_argument('--learning_rate', type=float, default=3e-5)
+parser.add_argument('--dataset', type=str, default='mnist')
+parser.add_argument('--output_dir', type=str, default='')
+args = parser.parse_args()
+
+# set output directory for sampled images
+if args.output_dir == '' and 'SLURM_JOB_ID' in os.environ.keys():
+    job_id = os.environ['SLURM_JOB_ID']
+    output_directory = 'nvvae_{}'.format(job_id)
+    os.mkdir(output_directory)
+else:
+    if args.output_dir == '':
+        output_directory = './'
+    else:
+        output_directory = args.output_dir
+        os.mkdir(output_directory)
+
+# load the data
+if args.dataset == 'cifar10':
+    train_data, train_labels, test_data, test_labels = data.load_cifar10(
+        './data/')
+elif args.dataset == 'mnist':
+    train_data, train_labels, test_data, test_labels = data.load_mnist(
+        './data/')
+    train_data = np.reshape(train_data, [-1, 28, 28, 1])
+    test_data = np.reshape(test_data, [-1, 28, 28, 1])
+data_shape = train_data.shape[1:]
+label_shape = train_labels.shape[1:]
+train_batches_per_epoch = train_data.shape[0] // args.unlabeled_batch_size
+test_batches_per_epoch = test_data.shape[0] // args.unlabeled_batch_size
+
+train_data, train_labels = data_util.unison_shuffled_copies(
+    [train_data, train_labels])
+labeled_train_data = train_data[:args.total_labeled_data]
+labeled_train_labels = train_labels[:args.total_labeled_data]
+labeled_train_gen = data.parallel_data_generator(
+    [labeled_train_data, labeled_train_labels], args.labeled_batch_size)
+unlabeled_train_gen = data.parallel_data_generator([train_data, train_labels],
+                                                   args.unlabeled_batch_size)
+test_gen = data.parallel_data_generator([test_data, test_labels],
+                                        args.unlabeled_batch_size)
+
+# build the model
+if args.dataset == 'cifar10':
+    z_encoder_module = snt.Sequential([
+        snt.Conv2D(16, 3),
+        snt.Residual(snt.Conv2D(16, 3)),
+        snt.Residual(snt.Conv2D(16, 3)), scaling.squeeze2d,
+        snt.Conv2D(64, 3),
+        snt.Residual(snt.Conv2D(64, 3)),
+        snt.Residual(snt.Conv2D(64, 3)), scaling.squeeze2d,
+        snt.Conv2D(64, 3),
+        snt.Residual(snt.Conv2D(64, 3)),
+        snt.Residual(snt.Conv2D(64, 3)), scaling.squeeze2d,
+        snt.Conv2D(128, 3),
+        snt.Residual(snt.Conv2D(128, 3)),
+        snt.Residual(snt.Conv2D(128, 3)), scaling.squeeze2d,
+        snt.Conv2D(256, 3),
+        snt.Residual(snt.Conv2D(256, 3)),
+        snt.Residual(snt.Conv2D(256, 3)), scaling.squeeze2d,
+        tf.keras.layers.Flatten(),
+        snt.Linear(100)
+    ])
+    x_hat_decoder_module = snt.Sequential([
+        lambda x: tf.reshape(x, [-1, 4, 4, 4]),
+        snt.Conv2D(32, 3),
+        snt.Residual(snt.Conv2D(32, 3)),
+        snt.Residual(snt.Conv2D(32, 3))
+    ] + [
+        scaling.unsqueeze2d,
+        snt.Conv2D(32, 3),
+        snt.Residual(snt.Conv2D(32, 3)),
+        snt.Residual(snt.Conv2D(32, 3))
+    ] * 5)
+    output_distribution_fn = discretized_logistic.DiscretizedLogistic
+elif args.dataset == 'mnist':
+    y_encoder_module = snt.nets.ConvNet2D([32, 64, 64, 128, 128], [3], [2],
+                                          [snt.SAME])
+    z_encoder_module = snt.nets.ConvNet2D([32, 64, 64, 128, 128], [3], [2],
+                                          [snt.SAME])
+    x_hat_decoder_module = snt.Sequential([
+        snt.Linear(64), lambda x: tf.reshape(x, [-1, 2, 2, 16]),
+        snt.nets.ConvNet2DTranspose([128, 64, 32, 32], [(4, 4), (8, 8),
+                                                        (16, 16), (32, 32)],
+                                    [5], [2], [snt.SAME]),
+        lambda x: tf.reshape(x, [-1, 32 * 32 * 32]),
+        snt.Linear(28 * 28), lambda x: tf.reshape(x, [-1, 28, 28, 1])
+    ])
+    output_distribution_fn = vae.BERNOULLI_FN
+
+model = M2_module.M2(
+    z_shape=args.z_shape,
+    y_shape=10,
+    z_net=z_encoder_module,
+    y_net=y_encoder_module,
+    x_hat_net=x_hat_decoder_module,
+    y_prior_temperature=0.5,
+    x_hat_dist_fn=output_distribution_fn)
+
+# build model
+temperature_ph = tf.placeholder(tf.float32)
+labeled_data_ph = tf.placeholder(tf.float32, shape=(None, ) + data_shape)
+unlabeled_data_ph = tf.placeholder(tf.float32, shape=(None, ) + data_shape)
+label_ph = tf.placeholder(tf.float32, shape=(None, ) + label_shape)
+# used exclusively to calculate classification rate
+unlabeled_label_ph = tf.placeholder(tf.float32, shape=(None, ) + label_shape)
+loss, stats_dict = model(
+    unlabeled_data_ph,
+    labeled_data_ph,
+    label_ph,
+    temperature_ph,
+    classification_loss_coeff=args.classification_loss_coeff)
+
+num_samples = 16
+nv_sample_ph = tf.placeholder_with_default(
+    tf.ones([num_samples, 10]), [num_samples, 10])
+sample = model.sample(sample_shape=[num_samples], y_value=nv_sample_ph)
+
+#temperature=temperature_ph,
+#nv_prior_sample=nv_sample_ph)
+classification_rate = tf.count_nonzero(
+    tf.equal(
+        tf.argmax(stats_dict['y_sample_unlabeled'], axis=2),
+        tf.argmax(unlabeled_label_ph, axis=1)),
+    dtype=tf.float32) / args.unlabeled_batch_size
+
+optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
+train_op = optimizer.minimize(loss)
+
+verbose_ops_dict = dict(stats_dict)
+del verbose_ops_dict['y_sample_unlabeled']
+verbose_ops_dict['classification_rate'] = classification_rate
+
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+with tf.Session(config=config) as session:
+    session.run(tf.global_variables_initializer())
+    for epoch in range(args.epochs):
+        temperature = args.temperature
+
+        def train_feed_dict_fn():
+            feed_dict = dict()
+            labeled_arrays = next(labeled_train_gen)
+            unlabeled_arrays = next(unlabeled_train_gen)
+            feed_dict[unlabeled_data_ph] = unlabeled_arrays[0]
+            feed_dict[labeled_data_ph] = labeled_arrays[0]
+            feed_dict[label_ph] = labeled_arrays[1]
+            feed_dict[unlabeled_label_ph] = unlabeled_arrays[1]
+            feed_dict[temperature_ph] = temperature
+            return feed_dict
+
+        def test_feed_dict_fn():
+            feed_dict = dict()
+            labeled_arrays = next(test_gen)
+            unlabeled_arrays = labeled_arrays
+            feed_dict[unlabeled_data_ph] = unlabeled_arrays[0]
+            feed_dict[labeled_data_ph] = labeled_arrays[0]
+            feed_dict[label_ph] = labeled_arrays[1]
+            feed_dict[unlabeled_label_ph] = unlabeled_arrays[1]
+            feed_dict[temperature_ph] = temperature
+            return feed_dict
+
+        print("EPOCH {}".format(epoch))
+        # TRAIN
+        print("TRAIN")
+        out_dict = util.run_epoch_ops(
+            session,
+            train_batches_per_epoch,
+            verbose_ops_dict=verbose_ops_dict,
+            silent_ops=[train_op],
+            feed_dict_fn=train_feed_dict_fn,
+            verbose=True)
+
+        mean_supervised_elbo = np.mean(out_dict['supervised_elbo'])
+        mean_supervised_rate = np.mean(out_dict['supervised_rate'])
+        mean_supervised_distortion = np.mean(out_dict['supervised_distortion'])
+        mean_supervised_y_log_prob = np.mean(out_dict['supervised_y_log_prob'])
+
+        mean_unsupervised_elbo = np.mean(out_dict['unsupervised_elbo'])
+        mean_unsupervised_rate = np.mean(out_dict['unsupervised_rate'])
+        mean_unsupervised_distortion = np.mean(
+            out_dict['unsupervised_distortion'])
+        mean_unsupervised_y_entropy = np.mean(
+            out_dict['unsupervised_y_entropy'])
+
+        mean_elbo = (mean_supervised_elbo * args.labeled_batch_size +
+                     mean_unsupervised_elbo * args.unlabeled_batch_size) / (
+                         args.labeled_batch_size + args.unlabeled_batch_size)
+        mean_rate = (mean_supervised_rate * args.labeled_batch_size +
+                     mean_unsupervised_rate * args.unlabeled_batch_size) / (
+                         args.labeled_batch_size + args.unlabeled_batch_size)
+        mean_distortion = (
+            mean_supervised_distortion * args.labeled_batch_size +
+            mean_unsupervised_distortion * args.unlabeled_batch_size) / (
+                args.labeled_batch_size + args.unlabeled_batch_size)
+
+        mean_classification_rate = np.mean(out_dict['classification_rate'])
+        bits_per_dim = -(mean_elbo) / (
+            np.log(2.) * reduce(operator.mul, data_shape[-3:]))
+
+        print(
+            "bits per dim: {:7.4f}\tclassification_rate: {:7.4f}\telbo: {:7.4f}\tdistortion: {:7.4f}\trate: {:7.4f}\ty_entropy: {:7.4f}\ty_log_prob: {:7.4f}".
+            format(bits_per_dim, mean_classification_rate, mean_elbo,
+                   mean_distortion, mean_rate, mean_unsupervised_y_entropy,
+                   mean_supervised_y_log_prob))
+
+        # TEST
+        print("TEST")
+        out_dict = util.run_epoch_ops(
+            session,
+            test_batches_per_epoch,
+            verbose_ops_dict=verbose_ops_dict,
+            silent_ops=[],
+            feed_dict_fn=test_feed_dict_fn,
+            verbose=True)
+
+        mean_supervised_elbo = np.mean(out_dict['supervised_elbo'])
+        mean_supervised_rate = np.mean(out_dict['supervised_rate'])
+        mean_supervised_distortion = np.mean(out_dict['supervised_distortion'])
+        mean_supervised_y_log_prob = np.mean(out_dict['supervised_y_log_prob'])
+
+        mean_unsupervised_elbo = np.mean(out_dict['unsupervised_elbo'])
+        mean_unsupervised_rate = np.mean(out_dict['unsupervised_rate'])
+        mean_unsupervised_distortion = np.mean(
+            out_dict['unsupervised_distortion'])
+        mean_unsupervised_y_entropy = np.mean(
+            out_dict['unsupervised_y_entropy'])
+
+        mean_elbo = (mean_supervised_elbo * args.labeled_batch_size +
+                     mean_unsupervised_elbo * args.unlabeled_batch_size) / (
+                         args.labeled_batch_size + args.unlabeled_batch_size)
+        mean_rate = (mean_supervised_rate * args.labeled_batch_size +
+                     mean_unsupervised_rate * args.unlabeled_batch_size) / (
+                         args.labeled_batch_size + args.unlabeled_batch_size)
+        mean_distortion = (
+            mean_supervised_distortion * args.labeled_batch_size +
+            mean_unsupervised_distortion * args.unlabeled_batch_size) / (
+                args.labeled_batch_size + args.unlabeled_batch_size)
+
+        mean_classification_rate = np.mean(out_dict['classification_rate'])
+        bits_per_dim = -(mean_elbo) / (
+            np.log(2.) * reduce(operator.mul, data_shape[-3:]))
+
+        print(
+            "bits per dim: {:7.4f}\tclassification_rate: {:7.4f}\telbo: {:7.4f}\tdistortion: {:7.4f}\trate: {:7.4f}\ty_entropy: {:7.4f}\ty_log_prob: {:7.4f}".
+            format(bits_per_dim, mean_classification_rate, mean_elbo,
+                   mean_distortion, mean_rate, mean_unsupervised_y_entropy,
+                   mean_supervised_y_log_prob))
+
+        for temp in [0.01, 0.5]:
+            for c in range(10):
+                nv_sample_val = np.zeros([num_samples, 10], dtype=float)
+                nv_sample_val[:, c] = 1.
+                generated_img = session.run(sample, {
+                    temperature_ph: temp,
+                    nv_sample_ph: nv_sample_val
+                })
+                filename = os.path.join(output_directory,
+                                        'epoch{}_class{}.png'.format(epoch, c))
+                plot.plot(filename, np.squeeze(generated_img), 4, 4)

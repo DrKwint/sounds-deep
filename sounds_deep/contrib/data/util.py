@@ -41,6 +41,10 @@ def maybe_download_and_extract(url, download_dir):
 
         print("Done.")
 
+def unison_shuffled_copies(arrays):
+    assert all([len(a) == len(arrays[0]) for a in arrays])
+    p = np.random.permutation(len(arrays[0]))
+    return [a[p] for a in arrays]
 
 def one_hot(x, n):
     if len(x.shape) != 1:
