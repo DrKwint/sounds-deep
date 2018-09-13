@@ -39,6 +39,7 @@ if args.output_dir == '' and 'SLURM_JOB_ID' in os.environ.keys():
 else:
     if args.output_dir == '':
         args.output_dir = './'
+        output_directory = './'
     else:
         output_directory = args.output_dir
         os.mkdir(output_directory)
