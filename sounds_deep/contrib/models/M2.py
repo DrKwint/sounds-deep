@@ -128,6 +128,7 @@ class M2(snt.AbstractModule):
 
         y_posterior_labeled = infer_y_posterior(labeled_input,
                                                 y_posterior_temperature)
+        y_sample_labeled = y_posterior_labeled.sample(n_samples)
         y_posterior_unlabeled = infer_y_posterior(unlabeled_input,
                                                   y_posterior_temperature)
         y_sample_unlabeled = y_posterior_unlabeled.sample(n_samples)
@@ -145,18 +146,18 @@ class M2(snt.AbstractModule):
         supervised_distortion = -x_hat_labeled.log_prob(labeled_input)
         unsupervised_distortion = -x_hat_unlabeled.log_prob(unlabeled_input)
 
-        supervised_rate = -(-z_posterior_labeled.log_prob(z_sample_labeled) +
-                           self.z_prior.log_prob(z_sample_labeled) +
+        supervised_rate = (z_posterior_labeled.log_prob(z_sample_labeled) -
+                           self.z_prior.log_prob(z_sample_labeled) -
                            self.y_prior.log_prob(hvar_labels))
-        unsupervised_rate = -(
-            -z_posterior_unlabeled.log_prob(z_sample_unlabeled) +
-            self.z_prior.log_prob(z_sample_unlabeled) +
+        unsupervised_rate = (z_posterior_unlabeled.log_prob(z_sample_unlabeled) -
+            self.z_prior.log_prob(z_sample_unlabeled) -
             self.y_prior.log_prob(y_sample_unlabeled))
 
-        unsupervised_y_entropy = -tfd.Categorical(
-            probs=tf.exp(y_sample_unlabeled)).entropy()
-        supervised_y_log_prob = tf.reduce_mean(
-            y_posterior_labeled.log_prob(hvar_labels), axis=-1)
+        #unsupervised_y_entropy = tfd.Categorical(
+        #    probs=tf.exp(y_sample_unlabeled)).entropy()
+        y_logits = self._y_logits(self._y_net(unlabeled_input))
+        unsupervised_y_entropy = -tf.reduce_sum(tf.exp(y_logits) * y_logits, axis=-1)
+        supervised_y_log_prob = tf.reduce_sum(hvar_labels * y_sample_labeled, axis=-1)
 
         supervised_elbo_local = -(supervised_distortion + supervised_rate)
         supervised_elbo = tf.reduce_mean(

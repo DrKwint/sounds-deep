@@ -194,7 +194,7 @@ with tf.Session(config=config) as session:
         print("TRAIN")
         out_dict = util.run_epoch_ops(
             session,
-            20, #train_batches_per_epoch,
+            train_batches_per_epoch,
             verbose_ops_dict=verbose_ops_dict,
             silent_ops=[train_op],
             feed_dict_fn=train_feed_dict_fn,
@@ -237,7 +237,7 @@ with tf.Session(config=config) as session:
         print("TEST")
         out_dict = util.run_epoch_ops(
             session,
-            2,# test_batches_per_epoch,
+            test_batches_per_epoch,
             verbose_ops_dict=verbose_ops_dict,
             silent_ops=[],
             feed_dict_fn=test_feed_dict_fn,
