@@ -19,9 +19,9 @@ class NamedLatentVAE(snt.AbstractModule):
                  name='named_latent_vae'):
         super(NamedLatentVAE, self).__init__(name=name)
         self._nv_encoder = nv_encoder_net
-        self._encoder = encoder_net
-        self._decoder = decoder_net
-        self._latent_posterior_fn = posterior_fn
+        self._z_net = encoder_net
+        self._x_hat_net = decoder_net
+        self._z_posterior_fn = posterior_fn
         self._output_dist_fn = output_dist_fn
 
         with self._enter_variable_scope():
@@ -71,20 +71,7 @@ class NamedLatentVAE(snt.AbstractModule):
             temperature, logits=tf.ones_like(nv_predicted))
 
         # machine latent
-        data_shape = data.get_shape().as_list()
-        img_nv_predicted = tf.tile(
-            tf.expand_dims(tf.expand_dims(nv_predicted, 2), 2),
-            [1, 1, data_shape[1], data_shape[2], 1])
-        z_encoder_input = tf.concat(
-            [
-                tf.tile(tf.expand_dims(data, 0), [n_samples, 1, 1, 1, 1]),
-                img_nv_predicted
-            ],
-            axis=4)
-        batch_encoder = snt.BatchApply(self._encoder)
-        z_encoder_repr = batch_encoder(z_encoder_input)
-        self.latent_posterior = self._latent_posterior_fn(
-            self._loc(z_encoder_repr), self._scale(z_encoder_repr))
+        self.latent_posterior = self.infer_z_posterior(data, nv_predicted)
 
         # draw latent posterior sample
         latent_posterior_sample = self.latent_posterior.sample()
@@ -133,10 +120,26 @@ class NamedLatentVAE(snt.AbstractModule):
         if len(y_shape) == 2:
             y = tf.tile(tf.expand_dims(y, 0), [tf.shape(z)[0], 1, 1])
         joint_yz = tf.concat([y, z], axis=-1)
-        sample_decoder = snt.BatchApply(self._decoder)
+        sample_decoder = snt.BatchApply(self._x_hat_net)
         output = sample_decoder(joint_yz)
         return tfd.Independent(
             self._output_dist_fn(output), reinterpreted_batch_ndims=3)
+
+    def infer_z_posterior(self, x, y):
+        """x should be rank 4 and y should be rank 2 or 3"""
+        x_shape = util.int_shape(x)
+        y_shape = util.int_shape(y)
+        y_channel = tf.tile(
+            tf.expand_dims(tf.expand_dims(y, 2), 2),
+            [1, 1, x_shape[1], x_shape[2], 1])
+        z_encoder_input = tf.concat(
+            [
+                tf.tile(tf.expand_dims(x, 0), [y_shape[0], 1, 1, 1, 1]),
+                y_channel
+            ],
+            axis=4)
+        z_repr = snt.BatchApply(self._z_net)(z_encoder_input)
+        return self._z_posterior_fn(self._loc(z_repr), self._scale(z_repr))
 
     def sample(self,
                sample_shape=(),
