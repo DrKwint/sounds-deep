@@ -62,18 +62,16 @@ class M2(snt.AbstractModule):
         product = lambda x: functools.reduce(operator.mul, x)
         with self._enter_variable_scope():
             # input to _loc and _scale is shape
-            # (n_samples, batch_size, _)
-            # want output shape (n_samples, batch_size) + z_shape
-            self._loc = snt.BatchApply(
-                snt.Sequential([
+            # (batch_size, _)
+            # want output shape (batch_size) + z_shape
+            self._loc = snt.Sequential([
                     snt.Linear(product(z_shape)),
                     lambda x: tf.reshape(x, [-1] + z_shape)
-                ]))
-            self._scale = snt.BatchApply(
-                snt.Sequential([
+                ])
+            self._scale = snt.Sequential([
                     snt.Linear(product(z_shape)),
                     lambda x: tf.reshape(x, [-1] + z_shape)
-                ]))
+                ])
             # input to _y_logits is shape
             # (n_samples, batch_size, height, width, channels)
             # want output shape (n_samples, batch_size) + y_shape
@@ -117,21 +115,44 @@ class M2(snt.AbstractModule):
 
         def infer_z_posterior(x, y):
             """x should be rank 4 and y should be rank 2 or 3"""
-            y_shape = util.int_shape(y)
-            if len(y_shape) == 2:
-                y = tf.tile(tf.expand_dims(y, 0), [n_samples, 1, 1])
-            z_logits = snt.BatchFlatten()(self._z_net(x))
-            z_logits = tf.tile(tf.expand_dims(z_logits, 0), [n_samples, 1, 1])
-            z_encoder_repr = tf.concat([z_logits, y], -1)
-            return self._z_posterior_fn(
-                self._loc(z_encoder_repr), self._scale(z_encoder_repr))
+            z_repr = self._z_net(x, y)
+            z_repr = snt.BatchFlatten()(z_repr)
+            print(z_repr)
+            return self._z_posterior_fn(self._loc(z_repr), self._scale(z_repr))
+            # data_shape = util.int_shape(x)
+            # print(y)
+            # y_channel = tf.tile(
+            #     tf.expand_dims(tf.expand_dims(tf.expand_dims(y, 0), 2), 2),
+            #     [n_samples, 1, data_shape[1], data_shape[2], 1])
+            # print(y_channel)
+            # z_encoder_input = tf.concat(
+            #     [
+            #         tf.tile(tf.expand_dims(x, 0), [n_samples, 1, 1, 1, 1]),
+            #         y_channel
+            #     ],
+            #     axis=4)
+            # print(z_encoder_input)
+            # batch_encoder = snt.BatchApply(self._z_net)
+            # z_encoder_repr = batch_encoder(z_encoder_input)
+            # print(z_encoder_repr)
+            # z_encoder_repr = snt.BatchFlatten(preserve_dims=2)(z_encoder_repr)
+            # print(z_encoder_repr)
+
+            # y_shape = util.int_shape(y)
+            # if len(y_shape) == 2:
+            #     y = tf.tile(tf.expand_dims(y, 0), [n_samples, 1, 1])
+            # z_logits = snt.BatchFlatten()(self._z_net(x))
+            # z_logits = tf.tile(tf.expand_dims(z_logits, 0), [n_samples, 1, 1])
+            # z_encoder_repr = tf.concat([z_logits, y], -1)
+            # return self._z_posterior_fn(
+            #     self._loc(z_encoder_repr), self._scale(z_encoder_repr))
 
         y_posterior_labeled = infer_y_posterior(labeled_input,
                                                 y_posterior_temperature)
-        y_sample_labeled = y_posterior_labeled.sample(n_samples)
+        y_sample_labeled = y_posterior_labeled.sample()
         y_posterior_unlabeled = infer_y_posterior(unlabeled_input,
                                                   y_posterior_temperature)
-        y_sample_unlabeled = y_posterior_unlabeled.sample(n_samples)
+        y_sample_unlabeled = y_posterior_unlabeled.sample()
 
         z_posterior_labeled = infer_z_posterior(labeled_input, hvar_labels)
         z_sample_labeled = z_posterior_labeled.sample()
@@ -149,27 +170,21 @@ class M2(snt.AbstractModule):
         supervised_rate = (z_posterior_labeled.log_prob(z_sample_labeled) -
                            self.z_prior.log_prob(z_sample_labeled) -
                            self.y_prior.log_prob(hvar_labels))
-        unsupervised_rate = (z_posterior_unlabeled.log_prob(z_sample_unlabeled) -
-            self.z_prior.log_prob(z_sample_unlabeled) -
-            self.y_prior.log_prob(y_sample_unlabeled))
+        unsupervised_rate = (z_posterior_unlabeled.log_prob(z_sample_unlabeled)
+                             - self.z_prior.log_prob(z_sample_unlabeled) -
+                             self.y_prior.log_prob(y_sample_unlabeled))
 
-        #unsupervised_y_entropy = tfd.Categorical(
-        #    probs=tf.exp(y_sample_unlabeled)).entropy()
         y_logits = self._y_logits(self._y_net(unlabeled_input))
-        unsupervised_y_entropy = -tf.reduce_sum(tf.exp(y_logits) * y_logits, axis=-1)
-        supervised_y_log_prob = tf.reduce_sum(hvar_labels * y_sample_labeled, axis=-1)
+        unsupervised_y_entropy = -tf.reduce_sum(
+            tf.exp(y_logits) * y_logits, axis=-1)
+        supervised_y_log_prob = tf.reduce_sum(
+            hvar_labels * y_sample_labeled, axis=-1)
 
         supervised_elbo_local = -(supervised_distortion + supervised_rate)
-        supervised_elbo = tf.reduce_mean(
-            tf.reduce_logsumexp(supervised_elbo_local, axis=0) - tf.log(
-                tf.to_float(n_samples)),
-            axis=-1)
+        supervised_elbo = tf.reduce_mean(supervised_elbo_local, axis=-1)
         unsupervised_elbo_local = -(unsupervised_distortion +
                                     unsupervised_rate) + unsupervised_y_entropy
-        unsupervised_elbo = tf.reduce_mean(
-            tf.reduce_logsumexp(unsupervised_elbo_local, axis=0) - tf.log(
-                tf.to_float(n_samples)),
-            axis=-1)
+        unsupervised_elbo = tf.reduce_mean(unsupervised_elbo_local, axis=0)
 
         elbo = supervised_elbo + unsupervised_elbo + (
             classification_loss_coeff * supervised_y_log_prob)

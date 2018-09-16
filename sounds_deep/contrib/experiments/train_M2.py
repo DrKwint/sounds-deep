@@ -23,8 +23,8 @@ parser = argparse.ArgumentParser(
     description='Train a semi-supervised VAE model.')
 parser.add_argument('--temperature', type=float, default=0.5)
 parser.add_argument('--total_labeled_data', type=int, default=100)
-parser.add_argument('--unlabeled_batch_size', type=int, default=64)
-parser.add_argument('--labeled_batch_size', type=int, default=64)
+parser.add_argument('--unlabeled_batch_size', type=int, default=32)
+parser.add_argument('--labeled_batch_size', type=int, default=32)
 parser.add_argument('--z_shape', type=int, default=32)
 parser.add_argument('--classification_loss_coeff', type=float, default=0.8)
 parser.add_argument('--importance_weighting_samples', type=int, default=1)
@@ -105,10 +105,11 @@ if args.dataset == 'cifar10':
     ] * 5)
     output_distribution_fn = discretized_logistic.DiscretizedLogistic
 elif args.dataset == 'mnist':
-    y_encoder_module = snt.nets.ConvNet2D([32, 64, 64, 128, 128], [3], [2],
+    y_encoder_module = snt.nets.ConvNet2D([32, 64, 128], [3], [2],
                                           [snt.SAME])
-    z_encoder_module = snt.nets.ConvNet2D([32, 64, 64, 128, 128], [3], [2],
-                                          [snt.SAME])
+    #z_encoder_module = snt.nets.ConvNet2D([32, 64, 128], [3], [2],
+    #                                      [snt.SAME])
+    z_encoder_module = util.ConcatConvNet([32, 64, 128], [3], [2])
     x_hat_decoder_module = snt.Sequential([
         snt.Linear(64), lambda x: tf.reshape(x, [-1, 2, 2, 16]),
         snt.nets.ConvNet2DTranspose([128, 64, 32, 32], [(4, 4), (8, 8),
@@ -149,7 +150,7 @@ sample = model.sample(sample_shape=[num_samples], y_value=nv_sample_ph)
 
 classification_rate = tf.count_nonzero(
     tf.equal(
-        tf.argmax(stats_dict['y_sample_unlabeled'], axis=2),
+        tf.argmax(stats_dict['y_sample_unlabeled'], axis=1),
         tf.argmax(unlabeled_label_ph, axis=1)),
     dtype=tf.float32) / args.unlabeled_batch_size
 
