@@ -159,7 +159,7 @@ sample = model.sample(
     nv_prior_sample=nv_sample_ph)
 classification_rate = tf.count_nonzero(
     tf.equal(
-        tf.argmax(tf.squeeze(model.nv_latent_posterior_sample), axis=1),
+        tf.argmax(tf.squeeze(model.y_posterior_sample_unlabeled), axis=1),
         tf.argmax(unlabeled_label_ph, axis=1)),
     dtype=tf.float32) / args.batch_size
 

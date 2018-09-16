@@ -8,9 +8,9 @@ tfd = tf.contrib.distributions
 
 class NamedLatentVAE(snt.AbstractModule):
     def __init__(self,
-                 latent_dimension,
-                 nv_latent_dimension,
-                 nv_encoder_net,
+                 z_shape,
+                 y_shape,
+                 y_net,
                  encoder_net,
                  decoder_net,
                  prior_fn=vae.STD_GAUSSIAN_FN,
@@ -18,31 +18,23 @@ class NamedLatentVAE(snt.AbstractModule):
                  output_dist_fn=vae.BERNOULLI_FN,
                  name='named_latent_vae'):
         super(NamedLatentVAE, self).__init__(name=name)
-        self._nv_encoder = nv_encoder_net
+        self._y_net = y_net
         self._z_net = encoder_net
         self._x_hat_net = decoder_net
         self._z_posterior_fn = posterior_fn
         self._output_dist_fn = output_dist_fn
 
         with self._enter_variable_scope():
-            self._loc = snt.Sequential([
-                snt.BatchFlatten(preserve_dims=2),
-                snt.BatchApply(snt.Linear(latent_dimension))
-            ])
-            self._scale = snt.Sequential([
-                snt.BatchFlatten(preserve_dims=2),
-                snt.BatchApply(snt.Linear(latent_dimension))
-            ])
-            self._nv_logits = snt.Sequential(
-                [snt.BatchFlatten(),
-                 snt.Linear(nv_latent_dimension)])
-            self.latent_prior = prior_fn(latent_dimension)
+            self._loc = snt.Linear(z_shape)
+            self._scale = snt.Linear(z_shape)
+            self._y_logits = snt.Linear(y_shape)
+            self.latent_prior = prior_fn(z_shape)
 
     def _build(self,
                unlabeled_input,
                labeled_input,
                hvar_labels,
-               temperature,
+               y_posterior_temperature,
                classification_loss_coeff=0.8,
                n_samples=1,
                analytic_kl=True):
@@ -50,25 +42,23 @@ class NamedLatentVAE(snt.AbstractModule):
         data = tf.concat([labeled_input, unlabeled_input], axis=0)
 
         # predict y
-        nv_logits = self._nv_logits(self._nv_encoder(unlabeled_input))
-        nv_labeled_logits = self._nv_logits(self._nv_encoder(labeled_input))
-        self.nv_labeled_latent_posterior = tfd.ExpRelaxedOneHotCategorical(
-            temperature, logits=nv_labeled_logits)
-        self.nv_latent_posterior = tfd.ExpRelaxedOneHotCategorical(
-            temperature, logits=nv_logits)
-        nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
-        self.nv_latent_posterior_sample = nv_latent_posterior_sample
-        nv_labeled_posterior_sample = self.nv_labeled_latent_posterior.sample(
-            n_samples)
+        y_posterior_labeled = self.infer_y_posterior(labeled_input,
+                                                     y_posterior_temperature)
+        y_posterior_sample_labeled = y_posterior_labeled.sample(n_samples)
+        y_posterior_unlabeled = self.infer_y_posterior(
+            unlabeled_input, y_posterior_temperature)
+        y_posterior_sample_unlabeled = y_posterior_unlabeled.sample(n_samples)
+        self.y_posterior_sample_unlabeled = y_posterior_sample_unlabeled 
+
         nv_predicted = tf.concat(
             [
                 tf.tile(
                     tf.expand_dims(hvar_labels, axis=0), [n_samples, 1, 1]),
-                tf.exp(nv_latent_posterior_sample)
+                tf.exp(y_posterior_sample_unlabeled)
             ],
             axis=1)
         self.nv_latent_prior = tfd.ExpRelaxedOneHotCategorical(
-            temperature, logits=tf.ones_like(nv_predicted))
+            y_posterior_temperature, logits=tf.ones_like(nv_predicted))
 
         # machine latent
         self.latent_posterior = self.infer_z_posterior(data, nv_predicted)
@@ -88,9 +78,10 @@ class NamedLatentVAE(snt.AbstractModule):
         supervised_distortion, unsupervised_distortion = tf.split(
             distortion, 2, axis=1)
         supervised_rate, unsupervised_rate = tf.split(rate, 2, axis=1)
+        nv_logits = y_posterior_unlabeled.parameters['logits']
         nv_entropy = -tf.reduce_sum(tf.exp(nv_logits) * nv_logits, axis=-1)
         nv_log_prob = tf.reduce_sum(
-            hvar_labels * nv_labeled_posterior_sample, axis=-1)
+            hvar_labels * y_posterior_sample_labeled, axis=-1)
 
         supervised_local_elbo = -(supervised_distortion + supervised_rate)
         unsupervised_local_elbo = -(
@@ -107,8 +98,8 @@ class NamedLatentVAE(snt.AbstractModule):
         self.posterior_logp = self.latent_posterior.log_prob(
             latent_posterior_sample)
         self.nv_prior_logp = self.nv_latent_prior.log_prob(nv_predicted)
-        self.nv_posterior_logp = self.nv_latent_posterior.log_prob(
-            nv_latent_posterior_sample)
+        self.nv_posterior_logp = y_posterior_unlabeled.log_prob(
+            y_posterior_sample_unlabeled)
         self.elbo = tf.reduce_mean(tf.reduce_logsumexp(elbo_local, axis=0))
 
     def _infer_x_hat(self, y, z):
@@ -125,6 +116,10 @@ class NamedLatentVAE(snt.AbstractModule):
         return tfd.Independent(
             self._output_dist_fn(output), reinterpreted_batch_ndims=3)
 
+    def infer_y_posterior(self, x, temperature):
+        logits = self._y_logits(snt.BatchFlatten()(self._y_net(x)))
+        return tfd.ExpRelaxedOneHotCategorical(temperature, logits=logits)
+
     def infer_z_posterior(self, x, y):
         """x should be rank 4 and y should be rank 2 or 3"""
         x_shape = util.int_shape(x)
@@ -139,7 +134,10 @@ class NamedLatentVAE(snt.AbstractModule):
             ],
             axis=4)
         z_repr = snt.BatchApply(self._z_net)(z_encoder_input)
-        return self._z_posterior_fn(self._loc(z_repr), self._scale(z_repr))
+        z_repr = snt.BatchFlatten(preserve_dims=2)(z_repr)
+        batch_loc = snt.BatchApply(self._loc)
+        batch_scale = snt.BatchApply(self._scale)
+        return self._z_posterior_fn(batch_loc(z_repr), batch_scale(z_repr))
 
     def sample(self,
                sample_shape=(),
