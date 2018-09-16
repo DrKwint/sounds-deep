@@ -1,6 +1,7 @@
 import sonnet as snt
 import sounds_deep.contrib.models.vae as vae
 import tensorflow as tf
+import sounds_deep.contrib.util.util as util
 
 tfd = tf.contrib.distributions
 
@@ -57,7 +58,8 @@ class NamedLatentVAE(snt.AbstractModule):
             temperature, logits=nv_logits)
         nv_latent_posterior_sample = self.nv_latent_posterior.sample(n_samples)
         self.nv_latent_posterior_sample = nv_latent_posterior_sample
-        nv_labeled_posterior_sample = self.nv_labeled_latent_posterior.sample(n_samples)
+        nv_labeled_posterior_sample = self.nv_labeled_latent_posterior.sample(
+            n_samples)
         nv_predicted = tf.concat(
             [
                 tf.tile(
@@ -86,28 +88,26 @@ class NamedLatentVAE(snt.AbstractModule):
 
         # draw latent posterior sample
         latent_posterior_sample = self.latent_posterior.sample()
-        joint_latent_posterior_sample = tf.concat(
-            [nv_predicted, latent_posterior_sample], axis=2)
 
         # define output distribution
-        sample_decoder = snt.BatchApply(self._decoder)
-        output = sample_decoder(joint_latent_posterior_sample)
-        self.output_distribution = tfd.Independent(
-            self._output_dist_fn(output), reinterpreted_batch_ndims=3)
+        x_hat = self._infer_x_hat(nv_predicted, latent_posterior_sample)
 
         # loss calculation
         # supervised:
-        distortion = -self.output_distribution.log_prob(data)
+        distortion = -x_hat.log_prob(data)
         rate = (self.latent_posterior.log_prob(latent_posterior_sample) -
                 self.latent_prior.log_prob(latent_posterior_sample) -
                 self.nv_latent_prior.log_prob(nv_predicted))
-        supervised_distortion, unsupervised_distortion = tf.split(distortion, 2, axis=1)
+        supervised_distortion, unsupervised_distortion = tf.split(
+            distortion, 2, axis=1)
         supervised_rate, unsupervised_rate = tf.split(rate, 2, axis=1)
         nv_entropy = -tf.reduce_sum(tf.exp(nv_logits) * nv_logits, axis=-1)
-        nv_log_prob = tf.reduce_sum(hvar_labels * nv_labeled_posterior_sample, axis=-1)
+        nv_log_prob = tf.reduce_sum(
+            hvar_labels * nv_labeled_posterior_sample, axis=-1)
 
         supervised_local_elbo = -(supervised_distortion + supervised_rate)
-        unsupervised_local_elbo = -(unsupervised_distortion + unsupervised_rate) + nv_entropy
+        unsupervised_local_elbo = -(
+            unsupervised_distortion + unsupervised_rate) + nv_entropy
 
         elbo_local = supervised_local_elbo + unsupervised_local_elbo + classification_loss_coeff * nv_log_prob
 
@@ -119,13 +119,24 @@ class NamedLatentVAE(snt.AbstractModule):
         self.prior_logp = self.latent_prior.log_prob(latent_posterior_sample)
         self.posterior_logp = self.latent_posterior.log_prob(
             latent_posterior_sample)
-        self.nv_prior_logp = self.nv_latent_prior.log_prob(
-            nv_predicted)
+        self.nv_prior_logp = self.nv_latent_prior.log_prob(nv_predicted)
         self.nv_posterior_logp = self.nv_latent_posterior.log_prob(
             nv_latent_posterior_sample)
-        self.elbo = tf.reduce_mean(tf.reduce_logsumexp(
-            elbo_local, axis=0))
-        return output
+        self.elbo = tf.reduce_mean(tf.reduce_logsumexp(elbo_local, axis=0))
+
+    def _infer_x_hat(self, y, z):
+        """z should be of rank 3 and y should be of rank 2 or 3"""
+        z_shape = util.int_shape(z)
+        y_shape = util.int_shape(y)
+        if len(z_shape) == 2:
+            z = tf.expand_dims(z, 0)
+        if len(y_shape) == 2:
+            y = tf.tile(tf.expand_dims(y, 0), [tf.shape(z)[0], 1, 1])
+        joint_yz = tf.concat([y, z], axis=-1)
+        sample_decoder = snt.BatchApply(self._decoder)
+        output = sample_decoder(joint_yz)
+        return tfd.Independent(
+            self._output_dist_fn(output), reinterpreted_batch_ndims=3)
 
     def sample(self,
                sample_shape=(),
@@ -173,7 +184,4 @@ class NamedLatentVAE(snt.AbstractModule):
                         temperature=temperature, logits=tf.ones(10)).sample(
                             sample_shape, seed, 'nv_prior_sample')
 
-                joint_prior_sample = tf.concat(
-                    [tf.exp(nv_prior_sample), prior_sample], axis=-1)
-                output = self._decoder(joint_prior_sample)
-                return self._output_dist_fn(output).mean()
+                return self._infer_x_hat(nv_prior_sample, prior_sample).mean()
