@@ -20,9 +20,9 @@ import sounds_deep.contrib.util.util as util
 
 parser = argparse.ArgumentParser(description='Train a VAE model.')
 parser.add_argument('--temperature', type=float, default=0.5)
-parser.add_argument('--batch_size', type=int, default=32)
-parser.add_argument('--num_labeled_data', type=int, default=100)
+parser.add_argument('--unlabeled_batch_size', type=int, default=32)
 parser.add_argument('--labeled_batch_size', type=int, default=32)
+parser.add_argument('--num_labeled_data', type=int, default=100)
 parser.add_argument('--latent_dimension', type=int, default=32)
 parser.add_argument('--classification_loss_coeff', type=float, default=0.8)
 parser.add_argument('--epochs', type=int, default=500)
@@ -45,13 +45,6 @@ else:
         os.mkdir(output_directory)
 
 
-def apply_temp(a, temperature=1.0):
-    # helper function to sample an index from a probability array
-    a = tf.log(a) / temperature
-    a = tf.exp(a) / tf.reduce_sum(tf.exp(a), axis=1, keepdims=True)
-    return a
-
-
 def unison_shuffled_copies(arrays):
     assert all([len(a) == len(arrays[0]) for a in arrays])
     p = np.random.permutation(len(arrays[0]))
@@ -60,22 +53,30 @@ def unison_shuffled_copies(arrays):
 
 # load the data
 if args.dataset == 'cifar10':
-    train_data, train_labels, _, _ = data.load_cifar10('./data/')
+    train_data, train_labels, test_data, test_labels = data.load_cifar10(
+        './data/')
 elif args.dataset == 'mnist':
     train_data, train_labels, test_data, test_labels = data.load_mnist(
         './data/')
     train_data = np.reshape(train_data, [-1, 28, 28, 1])
-data_shape = (args.batch_size, ) + train_data.shape[1:]
-label_shape = (args.batch_size, ) + train_labels.shape[1:]
-batches_per_epoch = train_data.shape[0] // args.batch_size
+    test_data = np.reshape(test_data, [-1, 28, 28, 1])
+data_shape = train_data.shape[1:]
+label_shape = train_labels.shape[1:]
+train_batches_per_epoch = train_data.shape[0] // args.unlabeled_batch_size
+test_batches_per_epoch = test_data.shape[0] // args.labeled_batch_size
 
+# choose labeled training data
 train_data, train_labels = unison_shuffled_copies([train_data, train_labels])
 labeled_train_data = train_data[:args.num_labeled_data]
 labeled_train_labels = train_labels[:args.num_labeled_data]
+
+# shuffle data and create generators
 labeled_train_gen = data.parallel_data_generator(
     [labeled_train_data, labeled_train_labels], args.labeled_batch_size)
 unlabeled_train_gen = data.parallel_data_generator([train_data, train_labels],
-                                                   args.batch_size)
+                                                   args.unlabeled_batch_size)
+test_gen = data.parallel_data_generator([test_data, test_labels],
+                                        args.labeled_batch_size)
 
 # build the model
 if args.dataset == 'cifar10':
@@ -134,14 +135,14 @@ model = nvvae.NamedLatentVAE(
 # build model
 temperature_ph = tf.placeholder(tf.float32)
 labeled_data_ph = tf.placeholder(
-    tf.float32, shape=(args.labeled_batch_size, ) + data_shape[1:])
+    tf.float32, shape=(args.labeled_batch_size, ) + data_shape)
 unlabeled_data_ph = tf.placeholder(
-    tf.float32, shape=(args.batch_size, ) + data_shape[1:])
+    tf.float32, shape=(args.unlabeled_batch_size, ) + data_shape)
 label_ph = tf.placeholder(
-    tf.float32, shape=(args.labeled_batch_size, ) + label_shape[1:])
+    tf.float32, shape=(args.labeled_batch_size, ) + label_shape)
 # used exclusively to calculate classification rate
 unlabeled_label_ph = tf.placeholder(
-    tf.float32, shape=(args.labeled_batch_size, ) + label_shape[1:])
+    tf.float32, shape=(args.unlabeled_batch_size, ) + label_shape)
 model(
     unlabeled_data_ph,
     labeled_data_ph,
@@ -161,7 +162,7 @@ classification_rate = tf.count_nonzero(
     tf.equal(
         tf.argmax(tf.squeeze(model.y_posterior_sample_unlabeled), axis=1),
         tf.argmax(unlabeled_label_ph, axis=1)),
-    dtype=tf.float32) / args.batch_size
+    dtype=tf.float32) / args.unlabeled_batch_size
 
 optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
 train_op = optimizer.minimize(-model.elbo)
@@ -186,7 +187,7 @@ with tf.Session(config=config) as session:
         temperature = args.temperature
         print("Temperature: {}".format(temperature))
 
-        def feed_dict_fn():
+        def train_feed_dict_fn():
             feed_dict = dict()
             labeled_arrays = next(labeled_train_gen)
             unlabeled_arrays = next(unlabeled_train_gen)
@@ -196,14 +197,54 @@ with tf.Session(config=config) as session:
             feed_dict[unlabeled_label_ph] = unlabeled_arrays[1]
             feed_dict[temperature_ph] = temperature
             return feed_dict
+        
+        def test_feed_dict_fn():
+            feed_dict = dict()
+            labeled_arrays = next(test_gen)
+            unlabeled_arrays = labeled_arrays
+            feed_dict[unlabeled_data_ph] = unlabeled_arrays[0]
+            feed_dict[labeled_data_ph] = labeled_arrays[0]
+            feed_dict[label_ph] = labeled_arrays[1]
+            feed_dict[unlabeled_label_ph] = unlabeled_arrays[1]
+            feed_dict[temperature_ph] = temperature
+            return feed_dict
 
         print("EPOCH {}".format(epoch))
+        print("TRAIN")
         out_dict = util.run_epoch_ops(
             session,
-            train_data.shape[0] // args.batch_size,
+            10, #train_batches_per_epoch,
             verbose_ops_dict=verbose_ops_dict,
             silent_ops=[train_op],
-            feed_dict_fn=feed_dict_fn,
+            feed_dict_fn=train_feed_dict_fn,
+            verbose=True)
+
+        mean_distortion = np.mean(out_dict['distortion'])
+        mean_rate = np.mean(out_dict['rate'])
+        mean_nv_entropy = np.mean(out_dict['nv_entropy'])
+        mean_nv_log_prob = np.mean(out_dict['nv_log_prob'])
+        mean_elbo = np.mean(out_dict['elbo'])
+        mean_prior_logp = np.mean(out_dict['prior_logp'])
+        mean_posterior_logp = np.mean(out_dict['posterior_logp'])
+        mean_nv_prior_logp = np.mean(out_dict['nv_prior_logp'])
+        mean_nv_posterior_logp = np.mean(out_dict['nv_posterior_logp'])
+        mean_classification_rate = np.mean(out_dict['classification_rate'])
+
+        bits_per_dim = -mean_elbo / (
+            np.log(2.) * reduce(operator.mul, data_shape[-3:]))
+        print(
+            "bits per dim: {:7.4f}\tdistortion: {:7.4f}\trate: {:7.4f}\tnv_entropy: {:7.4f}\tnv_log_prob: {:7.4f}\tprior_logp: {:7.4f}\tposterior_logp: {:7.4f}\telbo: {:7.4f}\tclassification_rate: {:7.4f}"
+            .format(bits_per_dim, mean_distortion, mean_rate, mean_nv_entropy,
+                    mean_nv_log_prob, mean_prior_logp, mean_posterior_logp,
+                    mean_elbo, mean_classification_rate))
+
+        print("TEST")
+        out_dict = util.run_epoch_ops(
+            session,
+            test_batches_per_epoch,
+            verbose_ops_dict=verbose_ops_dict,
+            silent_ops=[],
+            feed_dict_fn=test_feed_dict_fn,
             verbose=True)
 
         mean_distortion = np.mean(out_dict['distortion'])
