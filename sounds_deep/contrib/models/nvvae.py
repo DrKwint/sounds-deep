@@ -81,11 +81,11 @@ class NamedLatentVAE(snt.AbstractModule):
         nv_logits = y_posterior_unlabeled.parameters['logits']
         nv_entropy = -tf.reduce_sum(tf.exp(nv_logits) * nv_logits, axis=-1)
         nv_log_prob = tf.reduce_sum(
-            hvar_labels * y_posterior_sample_labeled, axis=-1)
+            hvar_labels * y_posterior_sample_labeled)
 
-        supervised_local_elbo = -(supervised_distortion + supervised_rate)
-        unsupervised_local_elbo = -(
-            unsupervised_distortion + unsupervised_rate) + nv_entropy
+        supervised_local_elbo = tf.reduce_mean(tf.reduce_logsumexp(-(supervised_distortion + supervised_rate), axis=0))
+        unsupervised_local_elbo = tf.reduce_mean(tf.reduce_logsumexp(-(
+            unsupervised_distortion + unsupervised_rate), axis=0) + nv_entropy)
 
         elbo_local = supervised_local_elbo + unsupervised_local_elbo + classification_loss_coeff * nv_log_prob
 
@@ -100,7 +100,7 @@ class NamedLatentVAE(snt.AbstractModule):
         self.nv_prior_logp = self.nv_latent_prior.log_prob(nv_predicted)
         self.nv_posterior_logp = y_posterior_unlabeled.log_prob(
             y_posterior_sample_unlabeled)
-        self.elbo = tf.reduce_mean(tf.reduce_logsumexp(elbo_local, axis=0))
+        self.elbo = elbo_local
 
     def _infer_x_hat(self, y, z):
         """z should be of rank 3 and y should be of rank 2 or 3"""
