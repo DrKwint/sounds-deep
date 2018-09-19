@@ -165,17 +165,17 @@ classification_rate = tf.count_nonzero(
     dtype=tf.float32) / args.unlabeled_batch_size
 
 optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-train_op = optimizer.minimize(-model.elbo)
+train_op = optimizer.minimize(model.objective)
 
 verbose_ops_dict = dict()
 verbose_ops_dict['distortion'] = model.distortion
-verbose_ops_dict['rate'] = model.rate
+#verbose_ops_dict['rate'] = model.rate
 verbose_ops_dict['nv_entropy'] = model.nv_entropy
 verbose_ops_dict['nv_log_prob'] = model.nv_log_prob
 verbose_ops_dict['elbo'] = model.elbo
 verbose_ops_dict['prior_logp'] = model.prior_logp
-verbose_ops_dict['posterior_logp'] = model.posterior_logp
-verbose_ops_dict['nv_prior_logp'] = model.nv_prior_logp
+#verbose_ops_dict['posterior_logp'] = model.posterior_logp
+#verbose_ops_dict['nv_prior_logp'] = model.nv_prior_logp
 verbose_ops_dict['nv_posterior_logp'] = model.nv_posterior_logp
 verbose_ops_dict['classification_rate'] = classification_rate
 
@@ -220,13 +220,13 @@ with tf.Session(config=config) as session:
             verbose=True)
 
         mean_distortion = np.mean(out_dict['distortion'])
-        mean_rate = np.mean(out_dict['rate'])
+        mean_rate = 0# np.mean(out_dict['rate'])
         mean_nv_entropy = np.mean(out_dict['nv_entropy'])
         mean_nv_log_prob = np.mean(out_dict['nv_log_prob'])
         mean_elbo = np.mean(out_dict['elbo'])
         mean_prior_logp = np.mean(out_dict['prior_logp'])
-        mean_posterior_logp = np.mean(out_dict['posterior_logp'])
-        mean_nv_prior_logp = np.mean(out_dict['nv_prior_logp'])
+        mean_posterior_logp = 0# np.mean(out_dict['posterior_logp'])
+        mean_nv_prior_logp = 0# np.mean(out_dict['nv_prior_logp'])
         mean_nv_posterior_logp = np.mean(out_dict['nv_posterior_logp'])
         mean_classification_rate = np.mean(out_dict['classification_rate'])
 
@@ -248,13 +248,13 @@ with tf.Session(config=config) as session:
             verbose=True)
 
         mean_distortion = np.mean(out_dict['distortion'])
-        mean_rate = np.mean(out_dict['rate'])
+        mean_rate = 0# np.mean(out_dict['rate'])
         mean_nv_entropy = np.mean(out_dict['nv_entropy'])
         mean_nv_log_prob = np.mean(out_dict['nv_log_prob'])
         mean_elbo = np.mean(out_dict['elbo'])
         mean_prior_logp = np.mean(out_dict['prior_logp'])
-        mean_posterior_logp = np.mean(out_dict['posterior_logp'])
-        mean_nv_prior_logp = np.mean(out_dict['nv_prior_logp'])
+        mean_posterior_logp = 0# np.mean(out_dict['posterior_logp'])
+        mean_nv_prior_logp = 0# np.mean(out_dict['nv_prior_logp'])
         mean_nv_posterior_logp = np.mean(out_dict['nv_posterior_logp'])
         mean_classification_rate = np.mean(out_dict['classification_rate'])
 

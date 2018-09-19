@@ -36,8 +36,7 @@ class NamedLatentVAE(snt.AbstractModule):
                hvar_labels,
                y_posterior_temperature,
                classification_loss_coeff=0.8,
-               n_samples=1,
-               analytic_kl=True):
+               n_samples=1):
         """data must be NHWC"""
         data = tf.concat([labeled_input, unlabeled_input], axis=0)
 
@@ -48,7 +47,7 @@ class NamedLatentVAE(snt.AbstractModule):
         y_posterior_unlabeled = self.infer_y_posterior(
             unlabeled_input, y_posterior_temperature)
         y_posterior_sample_unlabeled = y_posterior_unlabeled.sample(n_samples)
-        self.y_posterior_sample_unlabeled = y_posterior_sample_unlabeled 
+        self.y_posterior_sample_unlabeled = y_posterior_sample_unlabeled
 
         nv_predicted = tf.concat(
             [
@@ -57,14 +56,26 @@ class NamedLatentVAE(snt.AbstractModule):
                 tf.exp(y_posterior_sample_unlabeled)
             ],
             axis=1)
-        self.nv_latent_prior = tfd.ExpRelaxedOneHotCategorical(
-            y_posterior_temperature, logits=tf.ones_like(nv_predicted))
+        self.y_prior_labeled = tfd.ExpRelaxedOneHotCategorical(
+            y_posterior_temperature, logits=tf.ones_like(hvar_labels))
+        self.y_prior_unlabeled = tfd.ExpRelaxedOneHotCategorical(
+            y_posterior_temperature,
+            logits=tf.ones_like(y_posterior_sample_unlabeled))
 
-        # machine latent
         self.latent_posterior = self.infer_z_posterior(data, nv_predicted)
-
-        # draw latent posterior sample
         latent_posterior_sample = self.latent_posterior.sample()
+
+        _hvar_labels = tf.tile(
+            tf.expand_dims(hvar_labels, axis=0), [n_samples, 1, 1])
+        z_posterior_labeled = self.infer_z_posterior(labeled_input,
+                                                     _hvar_labels)
+        z_sample_labeled = z_posterior_labeled.sample()
+        z_posterior_unlabeled = self.infer_z_posterior(
+            unlabeled_input, tf.exp(y_posterior_sample_unlabeled))
+        z_sample_unlabeled = z_posterior_unlabeled.sample()
+        # temporary interface
+        latent_posterior_sample = tf.concat(
+            [z_sample_labeled, z_sample_unlabeled], axis=1)
 
         # define output distribution
         x_hat = self._infer_x_hat(nv_predicted, latent_posterior_sample)
@@ -72,35 +83,39 @@ class NamedLatentVAE(snt.AbstractModule):
         # loss calculation
         # supervised:
         distortion = -x_hat.log_prob(data)
-        rate = (self.latent_posterior.log_prob(latent_posterior_sample) -
-                self.latent_prior.log_prob(latent_posterior_sample) -
-                self.nv_latent_prior.log_prob(nv_predicted))
+        supervised_rate = z_posterior_labeled.log_prob(
+            z_sample_labeled) - self.latent_prior.log_prob(
+                z_sample_labeled) - self.y_prior_labeled.log_prob(hvar_labels)
+        unsupervised_rate = z_posterior_unlabeled.log_prob(
+            z_sample_unlabeled) - self.latent_prior.log_prob(
+                z_sample_unlabeled) - self.y_prior_unlabeled.log_prob(
+                    tf.exp(y_posterior_sample_unlabeled))
         supervised_distortion, unsupervised_distortion = tf.split(
             distortion, 2, axis=1)
-        supervised_rate, unsupervised_rate = tf.split(rate, 2, axis=1)
         nv_logits = y_posterior_unlabeled.parameters['logits']
         nv_entropy = -tf.reduce_sum(tf.exp(nv_logits) * nv_logits, axis=-1)
-        nv_log_prob = tf.reduce_sum(
-            hvar_labels * y_posterior_sample_labeled)
+        nv_log_prob = tf.reduce_sum(hvar_labels * y_posterior_sample_labeled)
 
-        supervised_local_elbo = tf.reduce_mean(tf.reduce_logsumexp(-(supervised_distortion + supervised_rate), axis=0))
-        unsupervised_local_elbo = tf.reduce_mean(tf.reduce_logsumexp(-(
-            unsupervised_distortion + unsupervised_rate), axis=0) + nv_entropy)
+        supervised_local_elbo = tf.reduce_mean(
+            tf.reduce_logsumexp(
+                -(supervised_distortion + supervised_rate), axis=0))
+        unsupervised_local_elbo = tf.reduce_mean(
+            tf.reduce_logsumexp(
+                -(unsupervised_distortion + unsupervised_rate), axis=0) +
+            nv_entropy)
 
-        elbo_local = supervised_local_elbo + unsupervised_local_elbo + classification_loss_coeff * nv_log_prob
+        elbo = supervised_local_elbo + unsupervised_local_elbo
+        objective = -elbo - classification_loss_coeff * nv_log_prob
 
         self.distortion = distortion
-        self.rate = rate
         self.nv_entropy = nv_entropy
         self.nv_log_prob = nv_log_prob
 
         self.prior_logp = self.latent_prior.log_prob(latent_posterior_sample)
-        self.posterior_logp = self.latent_posterior.log_prob(
-            latent_posterior_sample)
-        self.nv_prior_logp = self.nv_latent_prior.log_prob(nv_predicted)
         self.nv_posterior_logp = y_posterior_unlabeled.log_prob(
             y_posterior_sample_unlabeled)
-        self.elbo = elbo_local
+        self.elbo = elbo
+        self.objective = objective
 
     def _infer_x_hat(self, y, z):
         """z should be of rank 3 and y should be of rank 2 or 3"""
