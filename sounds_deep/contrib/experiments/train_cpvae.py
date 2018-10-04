@@ -6,6 +6,7 @@ import os
 import argparse
 import operator
 from functools import reduce
+import json
 
 import numpy as np
 import sonnet as snt
@@ -51,6 +52,10 @@ else:
     else:
         output_directory = args.output_dir
         os.mkdir(output_directory)
+
+with open(os.path.join(args.output_dir, 'cmd_line_arguments.json'), 'w') as fp:
+    json.dump(vars(args), fp)
+print(vars(args))
 
 # load the data
 if args.dataset == 'cifar10':
