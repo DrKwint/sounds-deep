@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import sonnet as snt
 import tensorflow as tf
@@ -8,6 +10,12 @@ from sklearn import tree
 
 tfd = tf.contrib.distributions
 tfb = tfd.bijectors
+
+
+def std_gaussian_KL_divergence(mu, sigma):
+    """ Analytic KL-div between N(mu, sigma) and N(0, 1) """
+    return -0.5 * tf.reduce_sum(
+        1 + tf.log(tf.square(sigma)) - tf.square(mu) - tf.square(sigma), 1)
 
 
 class CPVAE(snt.AbstractModule):
@@ -33,8 +41,8 @@ class CPVAE(snt.AbstractModule):
                  decision_tree,
                  encoder_net,
                  decoder_net,
-                 prior_fn=vae.STD_GAUSSIAN_FN,
-                 posterior_fn=vae.EXP_GAUSSIAN_FN,
+                 beta,
+                 gamma,
                  output_dist_fn=vae.BERNOULLI_FN,
                  name='vae'):
         """
@@ -54,13 +62,21 @@ class CPVAE(snt.AbstractModule):
         self._decision_tree = decision_tree
         self._encoder = encoder_net
         self._decoder = decoder_net
-        self._latent_posterior_fn = posterior_fn
         self._output_dist_fn = output_dist_fn
+        self.beta = beta
+        self.gamma = gamma
 
         with self._enter_variable_scope():
             self._loc = snt.Linear(latent_dimension)
-            self._scale = snt.Linear(latent_dimension)
-            self.latent_prior = prior_fn(latent_dimension)
+            self._scale = snt.Sequential(
+                [snt.Linear(latent_dimension), tf.nn.softplus])
+
+            self.class_locs = tf.Variable(
+                np.zeros([self._class_num, self._latent_dimension],
+                         dtype=np.float32))
+            self.class_scales = tf.Variable(
+                np.ones([self._class_num, self._latent_dimension],
+                        dtype=np.float32))
 
             # declare variables for gaussian box inference
             self._lower = tf.Variable(
@@ -90,8 +106,10 @@ class CPVAE(snt.AbstractModule):
         x = data
         encoder_repr = self._encoder(x)
         loc = self._loc(encoder_repr)
-        log_scale = self._scale(encoder_repr)
-        self.latent_posterior = self._latent_posterior_fn(loc, log_scale)
+        self.z_mu = loc
+        scale = self._scale(encoder_repr)
+        self.z_sigma = scale
+        self.latent_posterior = tfd.MultivariateNormalDiag(loc, scale)
         latent_posterior_sample = self.latent_posterior.sample(n_samples)
         self.latent_posterior_sample = latent_posterior_sample
         sample_decoder = snt.BatchApply(self._decoder)
@@ -100,22 +118,21 @@ class CPVAE(snt.AbstractModule):
             self._output_dist_fn(output), reinterpreted_batch_ndims=3)
 
         distortion = -self.output_distribution.log_prob(x)
-        if analytic_kl and n_samples == 1:
-            rate = tfd.kl_divergence(self.latent_posterior, self.latent_prior)
-        else:
-            rate = (self.latent_posterior.log_prob(latent_posterior_sample) -
-                    self.latent_prior.log_prob(latent_posterior_sample))
+        mean_adjustment = tf.matmul(labels, self.class_locs, a_is_sparse=True)
+        rate = self.beta * std_gaussian_KL_divergence(loc - mean_adjustment,
+                                                      tf.log(scale))
         elbo_local = -(rate + distortion)
 
-        y_pred = self._inference(loc, tf.exp(log_scale), self._lower,
-                                 self._upper, self._values)
+        y_pred = self._inference(loc, scale, self._lower, self._upper,
+                                 self._values)
         classification_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=y_pred, labels=tf.argmax(labels, axis=1))
+
+        # drift_loss = 1.0 * tf.norm(self.z_mu, ord=2, axis=1)
 
         self.classification_loss = classification_loss
         self.distortion = distortion
         self.rate = rate
-        self.prior_logp = self.latent_prior.log_prob(latent_posterior_sample)
         self.posterior_logp = self.latent_posterior.log_prob(
             latent_posterior_sample)
         self.elbo = tf.reduce_mean(tf.reduce_logsumexp(elbo_local, axis=0))
@@ -123,7 +140,7 @@ class CPVAE(snt.AbstractModule):
             tf.reduce_logsumexp(elbo_local, axis=0) -
             tf.log(tf.to_float(n_samples)))
 
-        objective = -self.elbo + 20 * classification_loss
+        objective = -self.elbo + self.gamma * classification_loss
 
         return objective
 
@@ -133,8 +150,7 @@ class CPVAE(snt.AbstractModule):
                batch_num,
                feed_dict_fn,
                epoch,
-               tree_args=None,
-               verbose=False):
+               output_dir=''):
         """
         Args:
         - label_tensor: each label should be one-hot encoded
@@ -142,14 +158,41 @@ class CPVAE(snt.AbstractModule):
         # run data
         codes = []
         labels = []
+        mu = []
+        sigma = []
         for _ in range(batch_num):
-            c, l = session.run(
-                [self.latent_posterior_sample, label_tensor],
-                feed_dict=feed_dict_fn())
+            c, m, s, l = session.run([
+                self.latent_posterior_sample, self.z_mu, self.z_sigma,
+                label_tensor
+            ],
+                                     feed_dict=feed_dict_fn())
             codes.append(c)
             labels.append(l)
+            mu.append(m)
+            sigma.append(s)
+        mu = np.concatenate(mu)
+        sigma = np.concatenate(sigma)
         codes = np.squeeze(np.concatenate(codes, axis=1))
         labels = np.argmax(np.concatenate(labels), axis=1)
+        sigma = np.array(sigma)
+
+        # update class stats
+        if len(labels.shape) > 1: labels = np.argmax(labels, axis=1)
+        class_locs = np.empty([self._class_num, self._latent_dimension])
+        class_scales = np.empty([self._class_num, self._latent_dimension])
+        mu_sq = np.square(mu)
+        sigma_sq = np.square(sigma)
+        sum_sq = sigma_sq + mu_sq
+        for l in range(self._class_num):
+            idxs = np.nonzero(labels == l)[0]
+            class_locs[l] = np.mean(mu[idxs], axis=0)
+            class_scales[l] = np.mean(
+                sum_sq[idxs], axis=0) - np.square(class_locs[l])
+            print('{}: {}'.format(l, np.linalg.norm(class_locs[l])))
+        session.run([
+            self.class_locs.assign(class_locs),
+            self.class_scales.assign(class_scales)
+        ])
 
         # train ensemble
         self._decision_tree.fit(codes, labels)
@@ -167,12 +210,16 @@ class CPVAE(snt.AbstractModule):
             self._upper.assign(upper),
             self._values.assign(values)
         ])
-        tree.export_graphviz(self._decision_tree, out_file='ddt_epoch{}.dot'.format(epoch), filled=True, rounded=True)
+        tree.export_graphviz(
+            self._decision_tree,
+            out_file=os.path.join(output_dir, 'ddt_epoch{}.dot'.format(epoch)),
+            filled=True,
+            rounded=True)
 
         predicted_labels = self._decision_tree.predict(codes)
-        return np.mean( predicted_labels != labels )
+        return np.mean(predicted_labels != labels)
 
-    def sample(self, sample_shape=(), seed=None, name='sample'):
+    def sample(self, batch_size, cluster_ids, latent_code=None):
         """Generate samples of the specified shape.
 
         `self._build` must be called before this function. 
@@ -186,10 +233,14 @@ class CPVAE(snt.AbstractModule):
             Tensor: a sample with prepended dimensions sample_shape.
         """
         assert self.is_connected, 'Must call `build` before this function'
-        if sample_shape == (): sample_shape = 1
-        with self._enter_variable_scope():
-            with tf.variable_scope(name):
-                prior_sample = self.latent_prior.sample(
-                    sample_shape, seed, 'prior_sample')
-                output = self._decoder(prior_sample)
-                return self._output_dist_fn(output).mean()
+        if latent_code is None:
+            epsilon = tf.random_normal([batch_size, self._latent_dimension])
+            if cluster_ids is None:
+                cluster_ids = tf.squeeze(
+                    tf.multinomial(tf.ones([batch_size, self._class_num]), 1))
+                cluster_ids = tf.one_hot(cluster_ids, self._class_num)
+            loc = tf.matmul(cluster_ids, self.class_locs, a_is_sparse=True)
+            scale = tf.matmul(cluster_ids, self.class_scales, a_is_sparse=True)
+            latent_code = epsilon * scale + loc
+            output = self._decoder(latent_code)
+            return self._output_dist_fn(output).mean()
