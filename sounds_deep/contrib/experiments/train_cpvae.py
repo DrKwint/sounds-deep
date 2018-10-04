@@ -40,12 +40,12 @@ parser.add_argument('--output_dir', type=str, default='./')
 args = parser.parse_args()
 
 # sampled img save directory
-if args.output_dir == '' and 'SLURM_JOB_ID' in os.environ.keys():
+if args.output_dir == './' and 'SLURM_JOB_ID' in os.environ.keys():
     job_id = os.environ['SLURM_JOB_ID']
     output_directory = 'cpvae_{}'.format(job_id)
     os.mkdir(output_directory)
 else:
-    if args.output_dir == '':
+    if args.output_dir == './':
         args.output_dir = './'
         output_directory = './'
     else:
