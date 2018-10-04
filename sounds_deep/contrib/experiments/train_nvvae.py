@@ -148,8 +148,7 @@ model(
     labeled_data_ph,
     label_ph,
     temperature_ph,
-    classification_loss_coeff=args.classification_loss_coeff,
-    analytic_kl=True)
+    classification_loss_coeff=args.classification_loss_coeff)
 
 num_samples = 16
 nv_sample_ph = tf.placeholder_with_default(
