@@ -18,6 +18,11 @@ def std_gaussian_KL_divergence(mu, sigma):
         1 + tf.log(tf.square(sigma)) - tf.square(mu) - tf.square(sigma), 1)
 
 
+def diagonal_gaussian_kl(mu_p, sigma_p, mu_q, sigma_q):
+    return -tf.reduce_sum(tf.log(sigma_q / sigma_p) + tf.square(sigma_p) + (
+        tf.square(mu_p - mu_q) / (2 * tf.square(sigma_q))) - 0.5)
+
+
 class CPVAE(snt.AbstractModule):
     """
 
@@ -119,8 +124,10 @@ class CPVAE(snt.AbstractModule):
 
         distortion = -self.output_distribution.log_prob(x)
         mean_adjustment = tf.matmul(labels, self.class_locs, a_is_sparse=True)
+        # scale_adjustment = tf.matmul(labels, self.class_scales, a_is_sparse=True)
         rate = self.beta * std_gaussian_KL_divergence(loc - mean_adjustment,
-                                                      tf.log(scale))
+                                                      scale)
+        # rate = self.beta * diagonal_gaussian_kl(loc, scale, mean_adjustment, scale_adjustment)
         elbo_local = -(rate + distortion)
 
         y_pred = self._inference(loc, scale, self._lower, self._upper,
