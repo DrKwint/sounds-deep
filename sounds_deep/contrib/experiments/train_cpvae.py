@@ -205,15 +205,15 @@ with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     if args.load:
         saver.restore(session, os.path.join(args.output_dir, 'model_params'))
+        base_epoch_val = session.run(base_epoch)
         train_class_rate = 1. - model.update(
             session,
             label_ph,
             args.update_samples * train_batches_per_epoch,
             train_feed_dict_fn,
-            base_epoch,
+            base_epoch_val,
             output_dir=args.output_dir)
 
-    base_epoch_val = session.run(base_epoch)
     for epoch in range(base_epoch_val + 1, args.epochs):
         print("EPOCH {}".format(epoch))
 
