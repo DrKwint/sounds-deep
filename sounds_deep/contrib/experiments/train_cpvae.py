@@ -36,6 +36,7 @@ parser.add_argument('--update_samples', type=int, default=10)
 
 parser.add_argument('--beta', type=float, default=1.)
 parser.add_argument('--gamma', type=float, default=10.)
+parser.add_argument('--delta', type=float, default=1.)
 
 parser.add_argument('--output_dir', type=str, default='./')
 args = parser.parse_args()
@@ -59,16 +60,25 @@ print(vars(args))
 
 # load the data
 if args.dataset == 'cifar10':
-    train_data, train_labels, _, _ = data.load_cifar10('./data/')
+    train_data, train_labels, test_data, test_labels = data.load_cifar10(
+        './data/')
 elif args.dataset == 'mnist':
-    train_data, train_labels, _, _ = data.load_mnist('./data/')
+    train_data, train_labels, test_data, test_labels = data.load_mnist(
+        './data/')
     train_data = np.reshape(train_data, [-1, 28, 28, 1])
-data_shape = (args.batch_size, ) + train_data.shape[1:]
-label_shape = (args.batch_size, ) + train_labels.shape[1:]
+    test_data = np.reshape(test_data, [-1, 28, 28, 1])
+
+train_data_shape = (args.batch_size, ) + train_data.shape[1:]
+test_data_shape = (args.batch_size, ) + test_data.shape[1:]
+train_label_shape = (args.batch_size, ) + train_labels.shape[1:]
+test_label_shape = (args.batch_size, ) + test_labels.shape[1:]
+
 train_batches_per_epoch = train_data.shape[0] // args.batch_size
-train_gen = data.data_generator(train_data, args.batch_size)
+test_batches_per_epoch = test_data.shape[0] // args.batch_size
 train_gen = data.parallel_data_generator([train_data, train_labels],
                                          args.batch_size)
+test_gen = data.parallel_data_generator([test_data, test_labels],
+                                        args.batch_size)
 
 # build the model
 if args.dataset == 'cifar10':
@@ -116,18 +126,27 @@ elif args.dataset == 'mnist':
     ])
     output_distribution_fn = vae.BERNOULLI_FN
 
-    def train_feed_dict_fn():
-        feed_dict = dict()
-        arrays = next(train_gen)
-        feed_dict[data_ph] = arrays[0]
-        feed_dict[label_ph] = arrays[1]
-        return feed_dict
+def train_feed_dict_fn():
+    feed_dict = dict()
+    arrays = next(train_gen)
+    feed_dict[data_ph] = arrays[0]
+    feed_dict[label_ph] = arrays[1]
+    return feed_dict
+
+def test_feed_dict_fn():
+    feed_dict = dict()
+    arrays = next(test_gen)
+    feed_dict[data_ph] = arrays[0]
+    feed_dict[label_ph] = arrays[1]
+    return feed_dict
 
 
 decision_tree = sklearn.tree.DecisionTreeClassifier(
     max_depth=args.max_depth,
     min_weight_fraction_leaf=0.01,
     max_leaf_nodes=args.max_leaf_nodes)
+
+
 model = cpvae.CPVAE(
     args.latent_dimension,
     args.max_leaf_nodes,
@@ -137,13 +156,18 @@ model = cpvae.CPVAE(
     decoder_module,
     beta=args.beta,
     gamma=args.gamma,
+    delta=args.delta,
     output_dist_fn=output_distribution_fn)
 
 # build model
 data_ph = tf.placeholder(
-    tf.float32, shape=(args.batch_size, ) + data_shape[1:], name='data_ph')
+    tf.float32,
+    shape=(args.batch_size, ) + train_data_shape[1:],
+    name='data_ph')
 label_ph = tf.placeholder(
-    tf.float32, shape=(args.batch_size, ) + label_shape[1:], name='label_ph')
+    tf.float32,
+    shape=(args.batch_size, ) + train_label_shape[1:],
+    name='label_ph')
 objective = model(data_ph, label_ph, analytic_kl=True)
 cluster_prob_ph = tf.placeholder(tf.float32, name='cluster_prob_ph')
 sample = model.sample(args.batch_size, cluster_prob_ph)
@@ -158,6 +182,17 @@ verbose_ops_dict['elbo'] = model.elbo
 verbose_ops_dict['iw_elbo'] = model.importance_weighted_elbo
 verbose_ops_dict['posterior_logp'] = model.posterior_logp
 verbose_ops_dict['classification_loss'] = model.classification_loss
+
+def test_classification_rate(session):
+    codes = []
+    labels = []
+    for _ in range(test_batches_per_epoch):
+        c, l = session.run([model.latent_posterior_sample, label_ph], feed_dict=test_feed_dict_fn())
+        codes.append(c)
+        labels.append(l)
+    codes = np.squeeze(np.concatenate(codes, axis=1))
+    labels = np.argmax(np.concatenate(labels), axis=1)
+    return decision_tree.score(codes, labels)
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -175,6 +210,8 @@ with tf.Session(config=config) as session:
                 epoch,
                 output_dir=args.output_dir)
 
+        # TRAIN
+        print('TRAIN')
         out_dict = util.run_epoch_ops(
             session,
             train_data.shape[0] // args.batch_size,
@@ -191,7 +228,7 @@ with tf.Session(config=config) as session:
         mean_classification_loss = np.mean(out_dict['classification_loss'])
 
         bits_per_dim = -mean_elbo / (
-            np.log(2.) * reduce(operator.mul, data_shape[-3:]))
+            np.log(2.) * reduce(operator.mul, train_data_shape[-3:]))
         print("bits per dim: {:7.5f}\tdistortion: {:7.5f}\trate: {:7.5f}\t\
             posterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}\tclass_rate: {:7.5f}\tclass_loss: {:7.5f}"
               .format(bits_per_dim, mean_distortion, mean_rate,
@@ -206,3 +243,29 @@ with tf.Session(config=config) as session:
             filename = os.path.join(output_directory,
                                     'epoch{}_class{}.png'.format(epoch, c))
             plot.plot(filename, np.squeeze(generated_img), 4, 4)
+
+        # TEST
+        print('TEST')
+        out_dict = util.run_epoch_ops(
+            session,
+            test_data.shape[0] // args.batch_size,
+            verbose_ops_dict=verbose_ops_dict,
+            feed_dict_fn=test_feed_dict_fn,
+            verbose=True)
+
+        mean_distortion = np.mean(out_dict['distortion'])
+        mean_rate = np.mean(out_dict['rate'])
+        mean_elbo = np.mean(out_dict['elbo'])
+        mean_iw_elbo = np.mean(out_dict['iw_elbo'])
+        mean_posterior_logp = np.mean(out_dict['posterior_logp'])
+        mean_classification_loss = np.mean(out_dict['classification_loss'])
+
+        test_class_rate = test_classification_rate(session)
+
+        bits_per_dim = -mean_elbo / (
+            np.log(2.) * reduce(operator.mul, train_data_shape[-3:]))
+        print("bits per dim: {:7.5f}\tdistortion: {:7.5f}\trate: {:7.5f}\t\
+            posterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}\tclass_rate: {:7.5f}\tclass_loss: {:7.5f}"
+              .format(bits_per_dim, mean_distortion, mean_rate,
+                      mean_posterior_logp, mean_elbo, mean_iw_elbo,
+                      test_class_rate, mean_classification_loss))

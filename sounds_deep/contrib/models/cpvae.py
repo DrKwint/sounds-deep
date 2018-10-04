@@ -48,6 +48,7 @@ class CPVAE(snt.AbstractModule):
                  decoder_net,
                  beta,
                  gamma,
+                 delta,
                  output_dist_fn=vae.BERNOULLI_FN,
                  name='vae'):
         """
@@ -70,6 +71,7 @@ class CPVAE(snt.AbstractModule):
         self._output_dist_fn = output_dist_fn
         self.beta = beta
         self.gamma = gamma
+        self.delta = delta
 
         with self._enter_variable_scope():
             self._loc = snt.Linear(latent_dimension)
@@ -135,7 +137,7 @@ class CPVAE(snt.AbstractModule):
         classification_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=y_pred, labels=tf.argmax(labels, axis=1))
 
-        # drift_loss = 1.0 * tf.norm(self.z_mu, ord=2, axis=1)
+        drift_loss = self.delta * tf.norm(self.z_mu, ord=2, axis=1)
 
         self.classification_loss = classification_loss
         self.distortion = distortion
