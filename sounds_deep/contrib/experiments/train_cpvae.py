@@ -39,23 +39,24 @@ parser.add_argument('--gamma', type=float, default=10.)
 parser.add_argument('--delta', type=float, default=1.)
 
 parser.add_argument('--output_dir', type=str, default='./')
+parser.add_argument('--load', action='store_true')
 args = parser.parse_args()
 
 # sampled img save directory
 if args.output_dir == './' and 'SLURM_JOB_ID' in os.environ.keys():
     job_id = os.environ['SLURM_JOB_ID']
     output_directory = 'cpvae_{}'.format(job_id)
-    os.mkdir(output_directory)
+    if not args.load: os.mkdir(output_directory)
 else:
     if args.output_dir == './':
         args.output_dir = './'
         output_directory = './'
     else:
         output_directory = args.output_dir
-        os.mkdir(output_directory)
+        if not args.load: os.mkdir(output_directory)
 
 with open(os.path.join(args.output_dir, 'cmd_line_arguments.json'), 'w') as fp:
-    json.dump(vars(args), fp)
+    if not args.load: json.dump(vars(args), fp)
 print(vars(args))
 
 # load the data
@@ -174,6 +175,7 @@ sample = model.sample(args.batch_size, cluster_prob_ph)
 
 optimizer = tf.train.RMSPropOptimizer(learning_rate=args.learning_rate)
 train_op = optimizer.minimize(objective)
+base_epoch = tf.get_variable('base_epoch', initializer=tf.zeros((), dtype=tf.int32))
 
 verbose_ops_dict = dict()
 verbose_ops_dict['distortion'] = model.distortion
@@ -194,14 +196,28 @@ def test_classification_rate(session):
     labels = np.argmax(np.concatenate(labels), axis=1)
     return decision_tree.score(codes, labels)
 
+saver = tf.train.Saver()
+
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
+best_test_class_rate = 0.0
 with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
-    for epoch in range(args.epochs):
+    if args.load:
+        saver.restore(session, os.path.join(args.output_dir, 'model_params'))
+        train_class_rate = 1. - model.update(
+            session,
+            label_ph,
+            args.update_samples * train_batches_per_epoch,
+            train_feed_dict_fn,
+            base_epoch,
+            output_dir=args.output_dir)
+
+    base_epoch_val = session.run(base_epoch)
+    for epoch in range(base_epoch_val + 1, args.epochs):
         print("EPOCH {}".format(epoch))
 
-        if epoch % args.update_period == 0:
+        if epoch % args.update_period == 1:
             train_class_rate = 1. - model.update(
                 session,
                 label_ph,
@@ -269,3 +285,9 @@ with tf.Session(config=config) as session:
               .format(bits_per_dim, mean_distortion, mean_rate,
                       mean_posterior_logp, mean_elbo, mean_iw_elbo,
                       test_class_rate, mean_classification_loss))
+
+        if test_class_rate > best_test_class_rate:
+            print('Saving model parameters at {} test classification rate'.format(test_class_rate))
+            session.run([tf.assign(base_epoch, epoch)])
+            saver.save(session, os.path.join(args.output_dir, 'model_params'))
+            best_test_class_rate = test_class_rate
