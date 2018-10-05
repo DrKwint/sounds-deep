@@ -203,6 +203,7 @@ config.gpu_options.allow_growth = True
 best_test_class_rate = 0.0
 with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
+    base_epoch_val = session.run(base_epoch)
     if args.load:
         saver.restore(session, os.path.join(args.output_dir, 'model_params'))
         base_epoch_val = session.run(base_epoch)
