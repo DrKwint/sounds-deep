@@ -153,6 +153,43 @@ class CPVAE(snt.AbstractModule):
 
         return objective
 
+    def posterior_parameters(self, session, label_tensor, batch_num, feed_dict_fn):
+        codes = []
+        labels = []
+        mu = []
+        sigma = []
+        for _ in range(batch_num):
+            c, m, s, l = session.run([
+                self.latent_posterior_sample, self.z_mu, self.z_sigma,
+                label_tensor
+            ],
+                                     feed_dict=feed_dict_fn())
+            codes.append(c)
+            labels.append(l)
+            mu.append(m)
+            sigma.append(s)
+        mu = np.concatenate(mu)
+        sigma = np.concatenate(sigma)
+        codes = np.squeeze(np.concatenate(codes, axis=1))
+        labels = np.argmax(np.concatenate(labels), axis=1)
+        sigma = np.array(sigma)
+        return mu, sigma, codes, labels
+
+    def aggregate_posterior_parameters(self, session, label_tensor, batch_num, feed_dict_fn):
+        mu, sigma, _, _ = self.posterior_parameters(session, label_tensor, batch_num, feed_dict_fn)
+        if len(labels.shape) > 1: labels = np.argmax(labels, axis=1)
+        class_locs = np.empty([self._class_num, self._latent_dimension])
+        class_scales = np.empty([self._class_num, self._latent_dimension])
+        mu_sq = np.square(mu)
+        sigma_sq = np.square(sigma)
+        sum_sq = sigma_sq + mu_sq
+        for l in range(self._class_num):
+            idxs = np.nonzero(labels == l)[0]
+            class_locs[l] = np.mean(mu[idxs], axis=0)
+            class_scales[l] = np.mean(
+                sum_sq[idxs], axis=0) - np.square(class_locs[l])
+        return class_locs, class_scales
+
     def update(self,
                session,
                label_tensor,
