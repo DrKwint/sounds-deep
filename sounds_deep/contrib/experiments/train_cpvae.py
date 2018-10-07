@@ -25,14 +25,14 @@ import sounds_deep.contrib.util.plot as plot
 parser = argparse.ArgumentParser(description='Train a VAE model.')
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--latent_dimension', type=int, default=50)
-parser.add_argument('--epochs', type=int, default=500)
+parser.add_argument('--epochs', type=int, default=600)
 parser.add_argument('--learning_rate', type=float, default=3e-5)
 parser.add_argument('--dataset', type=str, default='mnist')
 
 parser.add_argument('--max_leaf_nodes', type=int, default=20)
 parser.add_argument('--max_depth', type=int, default=10)
-parser.add_argument('--update_period', type=int, default=2)
-parser.add_argument('--update_samples', type=int, default=10)
+parser.add_argument('--update_period', type=int, default=3)
+parser.add_argument('--update_samples', type=int, default=20)
 
 parser.add_argument('--beta', type=float, default=1.)
 parser.add_argument('--gamma', type=float, default=10.)
@@ -46,6 +46,7 @@ args = parser.parse_args()
 if args.output_dir == './' and 'SLURM_JOB_ID' in os.environ.keys():
     job_id = os.environ['SLURM_JOB_ID']
     output_directory = 'cpvae_{}'.format(job_id)
+    args.output_dir = output_directory
     if not args.load: os.mkdir(output_directory)
 else:
     if args.output_dir == './':
