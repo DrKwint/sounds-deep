@@ -63,10 +63,15 @@ print(vars(args))
 # load the data
 if args.dataset == 'cifar10':
     train_data, train_labels, test_data, test_labels = data.load_cifar10(
-        './data/')
+        './data/cifar10/')
 elif args.dataset == 'mnist':
     train_data, train_labels, test_data, test_labels = data.load_mnist(
-        './data/')
+        './data/mnist/')
+    train_data = np.reshape(train_data, [-1, 28, 28, 1])
+    test_data = np.reshape(test_data, [-1, 28, 28, 1])
+elif args.dataset == 'fmnist':
+    train_data, train_labels, test_data, test_labels = data.load_fmnist(
+        './data/fmnist/')
     train_data = np.reshape(train_data, [-1, 28, 28, 1])
     test_data = np.reshape(test_data, [-1, 28, 28, 1])
 
@@ -116,7 +121,7 @@ if args.dataset == 'cifar10':
     ] * 5 +
     [snt.Conv2D(3, 3)])
     output_distribution_fn = discretized_logistic.DiscretizedLogistic
-elif args.dataset == 'mnist':
+elif args.dataset == 'mnist' or args.dataset == 'fmnist':
     encoder_module = snt.Sequential(
         [tf.keras.layers.Flatten(),
          snt.nets.MLP([200, 200])])

@@ -8,7 +8,7 @@ from PIL import Image
 img_size = 784
 
 # Load the MNIST dataset
-url_base = 'http://yann.lecun.com/exdb/mnist/'
+url_base = 'http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/'
 key_file = {
     'train_img': 'train-images-idx3-ubyte.gz',
     'train_label': 'train-labels-idx1-ubyte.gz',
@@ -30,7 +30,7 @@ def _download(data_dir, file_name):
     print("Done")
 
 
-def download_mnist(data_dir):
+def download_fmnist(data_dir):
     for v in key_file.values():
         _download(data_dir, v)
 
@@ -68,8 +68,8 @@ def _convert_numpy(data_dir):
     return dataset
 
 
-def init_mnist(data_dir, save_file):
-    download_mnist(data_dir)
+def init_fmnist(data_dir, save_file):
+    download_fmnist(data_dir)
     dataset = _convert_numpy(data_dir)
     print("Creating pickle file ...")
     with open(save_file, 'wb') as f:
@@ -85,7 +85,7 @@ def _change_ont_hot_label(X):
     return T
 
 
-def load_mnist(data_dir, normalize=True, flatten=True, one_hot_label=True):
+def load_fmnist(data_dir, normalize=True, flatten=True, one_hot_label=True):
     """
     Parameters
     ----------
@@ -99,7 +99,7 @@ def load_mnist(data_dir, normalize=True, flatten=True, one_hot_label=True):
     """
     save_file = os.path.join(data_dir, 'mnist.pkl')
     if not os.path.exists(save_file):
-        init_mnist(data_dir, save_file)
+        init_fmnist(data_dir, save_file)
 
     with open(save_file, 'rb') as f:
         dataset = pickle.load(f)
