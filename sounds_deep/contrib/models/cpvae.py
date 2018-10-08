@@ -137,7 +137,7 @@ class CPVAE(snt.AbstractModule):
         classification_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=y_pred, labels=tf.argmax(labels, axis=1))
 
-        drift_loss = self.delta * tf.norm(self.z_mu, ord=2, axis=1)
+        drift_loss = tf.norm(self.z_mu, ord=2, axis=1)
 
         self.classification_loss = classification_loss
         self.distortion = distortion
@@ -149,7 +149,7 @@ class CPVAE(snt.AbstractModule):
             tf.reduce_logsumexp(elbo_local, axis=0) -
             tf.log(tf.to_float(n_samples)))
 
-        objective = -self.elbo + self.gamma * classification_loss
+        objective = -self.elbo + self.gamma * classification_loss + self.delta * drift_loss
 
         return objective
 

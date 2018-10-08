@@ -104,7 +104,7 @@ if args.dataset == 'cifar10':
         snt.Linear(100)
     ])
     decoder_module = snt.Sequential([
-        lambda x: tf.reshape(x, [-1, 4, 4, 4]),
+        lambda x: tf.reshape(x, [-1, 1, 1, args.latent_dimension]),
         snt.Conv2D(32, 3),
         snt.Residual(snt.Conv2D(32, 3)),
         snt.Residual(snt.Conv2D(32, 3))
@@ -113,7 +113,8 @@ if args.dataset == 'cifar10':
         snt.Conv2D(32, 3),
         snt.Residual(snt.Conv2D(32, 3)),
         snt.Residual(snt.Conv2D(32, 3))
-    ] * 5)
+    ] * 5 +
+    [snt.Conv2D(3, 3)])
     output_distribution_fn = discretized_logistic.DiscretizedLogistic
 elif args.dataset == 'mnist':
     encoder_module = snt.Sequential(
