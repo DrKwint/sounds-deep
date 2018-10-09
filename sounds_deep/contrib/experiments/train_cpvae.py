@@ -21,6 +21,7 @@ import sounds_deep.contrib.models.cpvae as cpvae
 import sounds_deep.contrib.models.vae as vae
 import sounds_deep.contrib.parameterized_distributions.discretized_logistic as discretized_logistic
 import sounds_deep.contrib.util.plot as plot
+import sounds_deep.contrib.util.eval_cpvae as eval_cpvae
 
 parser = argparse.ArgumentParser(description='Train a VAE model.')
 parser.add_argument('--task', type=str, default='train', choices=['train', 'eval'])
@@ -42,6 +43,15 @@ parser.add_argument('--delta', type=float, default=1.)
 
 parser.add_argument('--output_dir', type=str, default='./')
 parser.add_argument('--load', action='store_true')
+
+parser.add_argument("--gendim", type=int)
+parser.add_argument("--genval", nargs="*", type=float)
+parser.add_argument("--startclass", nargs="*", type=int, help="Single input for one class, multiple for an average of the given classes.")
+parser.add_argument("--target", type=int)
+parser.add_argument("--numsteps", nargs="*", type=int, default=3, help="Number of images generated to each side of the mean.")
+parser.add_argument("--spacing", type=str, default='sd')
+parser.add_argument("--image_dir_name", type=str)
+
 args = parser.parse_args()
 
 # sampled img save directory
@@ -150,6 +160,18 @@ def test_feed_dict_fn():
     feed_dict[label_ph] = arrays[1]
     return feed_dict
 
+def test_classification_rate(session):
+    codes = []
+    labels = []
+    for _ in range(test_batches_per_epoch):
+        c, l = session.run([model.latent_posterior_sample, label_ph], feed_dict=test_feed_dict_fn())
+        codes.append(c)
+        labels.append(l)
+    codes = np.squeeze(np.concatenate(codes, axis=1))
+    labels = np.argmax(np.concatenate(labels), axis=1)
+    return decision_tree.score(codes, labels)
+
+
 
 decision_tree = sklearn.tree.DecisionTreeClassifier(
     max_depth=args.max_depth,
@@ -194,16 +216,6 @@ verbose_ops_dict['iw_elbo'] = model.importance_weighted_elbo
 verbose_ops_dict['posterior_logp'] = model.posterior_logp
 verbose_ops_dict['classification_loss'] = model.classification_loss
 
-def test_classification_rate(session):
-    codes = []
-    labels = []
-    for _ in range(test_batches_per_epoch):
-        c, l = session.run([model.latent_posterior_sample, label_ph], feed_dict=test_feed_dict_fn())
-        codes.append(c)
-        labels.append(l)
-    codes = np.squeeze(np.concatenate(codes, axis=1))
-    labels = np.argmax(np.concatenate(labels), axis=1)
-    return decision_tree.score(codes, labels)
 
 saver = tf.train.Saver()
 
@@ -223,66 +235,73 @@ with tf.Session(config=config) as session:
             train_feed_dict_fn,
             base_epoch_val,
             output_dir=args.output_dir)
+    
+    if args.task == 'eval':
+        print("okay")
+        class_locs, class_scales = model.aggregate_posterior_parameters(session, label_ph, train_batches_per_epoch, train_feed_dict_fn)
+        print("Loc dimensions: {}".format(class_locs.shape))
+        print("Scale dimensions: {}".format(class_scales.shape))
+        print(class_locs, class_scales)
+    else:
+        def run(phase, steps, feed_dict_fn, verbose=True):
+            if phase not in ['TRAIN', 'TEST']:
+                print("phase must be TRAIN or TEST")
+                exit()
+            print(phase)
 
-    def run(phase, steps, feed_dict_fn, verbose=True):
-        if phase not in ['TRAIN', 'TEST']:
-            print("phase must be TRAIN or TEST")
-            exit()
-        print(phase)
+            silent_ops = [train_op] if phase == 'TRAIN' else []
+            class_rate = test_classification_rate(session) if phase == 'TEST' else train_class_rate
 
-        silent_ops = [train_op] if phase == 'TRAIN' else []
-        class_rate = test_classification_rate(session) if phase == 'TEST' else train_class_rate
-
-        out_dict = util.run_epoch_ops(
-            session,
-            steps,
-            verbose_ops_dict=verbose_ops_dict,
-            silent_ops=silent_ops,
-            feed_dict_fn=feed_dict_fn,
-            verbose=verbose)
-        
-        mean_distortion = np.mean(out_dict['distortion'])
-        mean_rate = np.mean(out_dict['rate'])
-        mean_elbo = np.mean(out_dict['elbo'])
-        mean_iw_elbo = np.mean(out_dict['iw_elbo'])
-        mean_posterior_logp = np.mean(out_dict['posterior_logp'])
-        mean_classification_loss = np.mean(out_dict['classification_loss'])
-
-        bits_per_dim = -mean_elbo / (
-            np.log(2.) * reduce(operator.mul, train_data_shape[-3:]))
-        print("bits per dim: {:7.5f}\tdistortion: {:7.5f}\trate: {:7.5f}\t\
-            posterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}\tclass_rate: {:7.5f}\tclass_loss: {:7.5f}"
-            .format(bits_per_dim, mean_distortion, mean_rate,
-                    mean_posterior_logp, mean_elbo, mean_iw_elbo,
-                    class_rate, mean_classification_loss))
-        return class_rate
-
-    for epoch in range(base_epoch_val + 1, args.epochs):
-        print("EPOCH {}".format(epoch))
-
-        if epoch % args.update_period == 1:
-            train_class_rate = 1. - model.update(
+            out_dict = util.run_epoch_ops(
                 session,
-                label_ph,
-                args.update_samples * train_batches_per_epoch,
-                train_feed_dict_fn,
-                epoch,
-                output_dir=args.output_dir)
+                steps,
+                verbose_ops_dict=verbose_ops_dict,
+                silent_ops=silent_ops,
+                feed_dict_fn=feed_dict_fn,
+                verbose=verbose)
+            
+            mean_distortion = np.mean(out_dict['distortion'])
+            mean_rate = np.mean(out_dict['rate'])
+            mean_elbo = np.mean(out_dict['elbo'])
+            mean_iw_elbo = np.mean(out_dict['iw_elbo'])
+            mean_posterior_logp = np.mean(out_dict['posterior_logp'])
+            mean_classification_loss = np.mean(out_dict['classification_loss'])
 
-        train_class_rate = run('TRAIN', train_batches_per_epoch, train_feed_dict_fn)
-        test_class_rate = run('TEST', test_batches_per_epoch, test_feed_dict_fn)
+            bits_per_dim = -mean_elbo / (
+                np.log(2.) * reduce(operator.mul, train_data_shape[-3:]))
+            print("bits per dim: {:7.5f}\tdistortion: {:7.5f}\trate: {:7.5f}\t\
+                posterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}\tclass_rate: {:7.5f}\tclass_loss: {:7.5f}"
+                .format(bits_per_dim, mean_distortion, mean_rate,
+                        mean_posterior_logp, mean_elbo, mean_iw_elbo,
+                        class_rate, mean_classification_loss))
+            return class_rate
 
-        for c in range(10):
-            cluster_probs = np.zeros([args.batch_size, 10], dtype=float)
-            cluster_probs[:, c] = 1.
-            generated_img = session.run(sample,
-                                        {cluster_prob_ph: cluster_probs})
-            filename = os.path.join(output_directory,
-                                    'epoch{}_class{}.png'.format(epoch, c))
-            plot.plot(filename, np.squeeze(generated_img), 4, 4)
+        for epoch in range(base_epoch_val + 1, args.epochs):
+            print("EPOCH {}".format(epoch))
 
-        if test_class_rate > best_test_class_rate:
-            print('Saving model parameters at {} test classification rate'.format(test_class_rate))
-            session.run([tf.assign(base_epoch, epoch)])
-            saver.save(session, os.path.join(args.output_dir, 'model_params'))
-            best_test_class_rate = test_class_rate
+            if epoch % args.update_period == 1:
+                train_class_rate = 1. - model.update(
+                    session,
+                    label_ph,
+                    args.update_samples * train_batches_per_epoch,
+                    train_feed_dict_fn,
+                    epoch,
+                    output_dir=args.output_dir)
+
+            train_class_rate = run('TRAIN', train_batches_per_epoch, train_feed_dict_fn)
+            test_class_rate = run('TEST', test_batches_per_epoch, test_feed_dict_fn)
+
+            for c in range(10):
+                cluster_probs = np.zeros([args.batch_size, 10], dtype=float)
+                cluster_probs[:, c] = 1.
+                generated_img = session.run(sample,
+                                            {cluster_prob_ph: cluster_probs})
+                filename = os.path.join(output_directory,
+                                        'epoch{}_class{}.png'.format(epoch, c))
+                plot.plot(filename, np.squeeze(generated_img), 4, 4)
+
+            if test_class_rate > best_test_class_rate:
+                print('Saving model parameters at {} test classification rate'.format(test_class_rate))
+                session.run([tf.assign(base_epoch, epoch)])
+                saver.save(session, os.path.join(args.output_dir, 'model_params'))
+                best_test_class_rate = test_class_rate
