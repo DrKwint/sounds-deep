@@ -42,6 +42,67 @@ def run_epoch_ops(session,
     }
 
 
+def train(session,
+          epochs,
+          train_dict,
+          validate_dict,
+          train_ops_list,
+          verbose_ops_dict,
+          exit_fn,
+          verbose=True):
+    """
+    Args:
+        session
+        epochs
+        train_dict
+            setup_fn: callable taking session and epoch returning dict to add to verbose ops output
+            steps_per_epoch (int)
+            feed_dict_fn: callable returning feed_dict
+        validate_dict
+            setup_fn: callable taking session and epoch returning dict to add to verbose ops output
+            steps_per_epoch (int)
+            feed_dict_fn: callable returning feed_dict
+        train_ops_list: list of operations to silently run in training phase
+        verbose_ops_dict: dict of str to tensor to collect results in train and
+            validate phases
+        exit_fn (Session, int, dict): callable taking session, epoch, and the
+            validation verbose ops dict and saving if desired
+        verbose (bool): whether to use tqdm progress bar on stdout
+
+    """
+    for epoch in range(1, epochs):
+        print('TRAIN')
+        train_setup_dict = train_dict['setup_fn'](session, epoch)
+        train_run_dict = run_epoch_ops(
+            session,
+            train_dict['steps_per_epoch'],
+            verbose_ops_dict=verbose_ops_dict,
+            silent_ops=train_ops_list,
+            feed_dict_fn=train_dict['feed_dict_fn'],
+            verbose=verbose)
+        
+        train_run_dict = {k: np.mean(v) for k,v in train_run_dict.items()}
+        train_val_dict = dict(**train_setup_dict, **train_run_dict)
+        print(train_val_dict)
+
+        print('VALIDATE')
+        validate_setup_dict = validate_dict['setup_fn'](session, epoch)
+        validate_run_dict = run_epoch_ops(
+            session,
+            validate_dict['steps_per_epoch'],
+            verbose_ops_dict=verbose_ops_dict,
+            feed_dict_fn=validate_dict['feed_dict_fn'],
+            verbose=verbose)
+
+        validate_run_dict = {k: np.mean(v) for k,v in validate_run_dict.items()}
+        validate_val_dict = dict(**validate_setup_dict, **validate_run_dict)
+        print(validate_val_dict)
+        
+        # END OF EPOCH
+        if exit_fn(session, epoch, validate_val_dict):
+            return
+
+
 def average_gradients(tower_grads):
     """Calculate the average gradient for each shared variable across all towers.
   Note that this function provides a synchronization point across all towers.

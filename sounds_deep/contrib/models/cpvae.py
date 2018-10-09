@@ -238,7 +238,7 @@ class CPVAE(snt.AbstractModule):
             class_locs[l] = np.mean(mu[idxs], axis=0)
             class_scales[l] = np.mean(
                 sum_sq[idxs], axis=0) - np.square(class_locs[l])
-            print('{}: {}'.format(l, np.linalg.norm(class_locs[l])))
+            # print('{}: {}'.format(l, np.linalg.norm(class_locs[l])))
         session.run([
             self.class_locs.assign(class_locs),
             self.class_scales.assign(class_scales)

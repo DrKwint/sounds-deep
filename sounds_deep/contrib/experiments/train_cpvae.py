@@ -261,51 +261,9 @@ with tf.Session(config=config) as session:
         base_epoch_val = session.run(base_epoch)
 
     if args.task == 'train':
-
-        def run(phase, steps, feed_dict_fn, verbose=True):
-            if phase not in ['TRAIN', 'TEST']:
-                print("phase must be TRAIN or TEST")
-                exit()
-            print(phase)
-
-            silent_ops = [train_op] if phase == 'TRAIN' else []
-
-            if phase == 'TRAIN':
-                class_rate = classification_rate(session, train_feed_dict_fn,
-                                                 train_batches_per_epoch)
-            elif phase == 'TEST':
-                class_rate = classification_rate(session, test_feed_dict_fn,
-                                                 test_batches_per_epoch)
-
-            out_dict = util.run_epoch_ops(
-                session,
-                steps,
-                verbose_ops_dict=verbose_ops_dict,
-                silent_ops=silent_ops,
-                feed_dict_fn=feed_dict_fn,
-                verbose=verbose)
-
-            mean_distortion = np.mean(out_dict['distortion'])
-            mean_rate = np.mean(out_dict['rate'])
-            mean_elbo = np.mean(out_dict['elbo'])
-            mean_iw_elbo = np.mean(out_dict['iw_elbo'])
-            mean_posterior_logp = np.mean(out_dict['posterior_logp'])
-            mean_classification_loss = np.mean(out_dict['classification_loss'])
-
-            bits_per_dim = -mean_elbo / (
-                np.log(2.) * reduce(operator.mul, train_data_shape[-3:]))
-            print("bits per dim: {:7.5f}\tdistortion: {:7.5f}\trate: {:7.5f}\t\
-                posterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}\tclass_rate: {:7.5f}\tclass_loss: {:7.5f}"
-                  .format(bits_per_dim, mean_distortion, mean_rate,
-                          mean_posterior_logp, mean_elbo, mean_iw_elbo,
-                          class_rate, mean_classification_loss))
-            return class_rate
-
-        for epoch in range(base_epoch_val + 1, args.epochs):
-            print("EPOCH {}".format(epoch))
-
+        def train_setup_fn(session, epoch):
             if epoch % args.update_period == 1:
-                train_class_rate = 1. - model.update(
+                model.update(
                     session,
                     label_ph,
                     args.update_samples * train_batches_per_epoch,
@@ -313,11 +271,18 @@ with tf.Session(config=config) as session:
                     epoch,
                     output_dir=args.output_dir)
 
-            train_class_rate = run('TRAIN', train_batches_per_epoch,
-                                   train_feed_dict_fn)
-            test_class_rate = run('TEST', test_batches_per_epoch,
-                                  test_feed_dict_fn)
+            class_rate = classification_rate(session, train_feed_dict_fn, train_batches_per_epoch)
+            return {'class_rate': class_rate}
 
+        def validate_setup_fn(session, epoch):
+            class_rate = classification_rate(session, train_feed_dict_fn, train_batches_per_epoch)
+            return {'class_rate': class_rate}
+        
+        train_dict = {'setup_fn': train_setup_fn, 'steps_per_epoch': train_batches_per_epoch, 'feed_dict_fn': train_feed_dict_fn}
+        validate_dict = {'setup_fn': validate_setup_fn, 'steps_per_epoch': test_batches_per_epoch, 'feed_dict_fn': test_feed_dict_fn}
+
+        def exit_fn(session, epoch, validate_dict):
+            # save decoder samples of each class
             for c in range(10):
                 cluster_probs = np.zeros([args.batch_size, 10], dtype=float)
                 cluster_probs[:, c] = 1.
@@ -326,10 +291,14 @@ with tf.Session(config=config) as session:
                 filename = os.path.join(output_directory,
                                         'epoch{}_class{}.png'.format(epoch, c))
                 plot.plot(filename, np.squeeze(generated_img), 4, 4)
-
-            if test_class_rate > best_test_class_rate:
+            
+            # decide whether to save model
+            if not hasattr(exit_fn, 'best_class_rate'):
+                exit_fn.best_class_rate = 0.0
+            class_rate = validate_dict['class_rate']
+            if class_rate > exit_fn.best_class_rate:
                 print('Saving model parameters at {} test classification rate'.
-                      format(test_class_rate))
+                      format(validate_dict['class_rate']))
                 session.run([tf.assign(base_epoch, epoch)])
                 saver.save(session,
                            os.path.join(args.output_dir, 'model_params'))
@@ -338,7 +307,12 @@ with tf.Session(config=config) as session:
                         os.path.join(args.output_dir, 'decision_tree.pkl'),
                         'wb') as dt_file:
                     pickle.dump(model._decision_tree, dt_file)
-                best_test_class_rate = test_class_rate
+                exit_fn.best_class_rate = class_rate
+            # not currently doing early stopping
+            return False
+
+        util.train(session, args.epochs, train_dict, validate_dict, [train_op],
+              verbose_ops_dict, exit_fn)
 
     elif args.task == 'eval':
         # calculate mu for each node
