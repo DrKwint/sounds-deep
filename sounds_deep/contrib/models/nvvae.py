@@ -44,8 +44,8 @@ class NamedLatentVAE(snt.AbstractModule):
         y_posterior_labeled = self.infer_y_posterior(labeled_input,
                                                      y_posterior_temperature)
         y_posterior_sample_labeled = y_posterior_labeled.sample(n_samples)
-        y_posterior_unlabeled = self.infer_y_posterior(
-            unlabeled_input, y_posterior_temperature)
+        y_posterior_unlabeled = self.infer_y_posterior(unlabeled_input,
+                                                       y_posterior_temperature)
         y_posterior_sample_unlabeled = y_posterior_unlabeled.sample(n_samples)
         self.y_posterior_sample_unlabeled = y_posterior_sample_unlabeled
 

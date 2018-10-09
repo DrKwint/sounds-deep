@@ -9,6 +9,7 @@ from sounds_deep.contrib.util.scaling import squeeze2d, unsqueeze2d
 tfd = tf.contrib.distributions
 LOGSCALE_FACTOR = 0.01
 
+
 def conv2d_zeros(name,
                  x,
                  width,
@@ -61,9 +62,10 @@ class GaussianizeSplit(snt.AbstractModule):
         if not reverse:
             z1, z2 = tf.split(z, 2, axis=-1)
             prior = self._get_prior(z1)
-            log_prob += tf.reduce_sum(prior.log_prob(z2), axis=[1,2])
+            log_prob += tf.reduce_sum(prior.log_prob(z2), axis=[1, 2])
             z1 = squeeze2d(z1)
-            eps = (z2 - prior.parameters['loc']) / prior.parameters['scale_diag']
+            eps = (
+                z2 - prior.parameters['loc']) / prior.parameters['scale_diag']
             return z1, log_prob, eps
         else:
             z1 = unsqueeze2d(z)
@@ -99,7 +101,7 @@ class Invertible1x1Conv(snt.AbstractModule):
             z = tf.nn.conv2d(z, _w, [1, 1, 1, 1], 'SAME', data_format='NHWC')
             logdet += dlogdet
         else:
-            _w = tf.matrix_inverse(w)# + tf.eye(shape[3])*1e-2)
+            _w = tf.matrix_inverse(w)  # + tf.eye(shape[3])*1e-2)
             _w = tf.reshape(_w, [1, 1] + w_shape)
             z = tf.nn.conv2d(z, _w, [1, 1, 1, 1], 'SAME', data_format='NHWC')
             logdet -= dlogdet
@@ -217,7 +219,6 @@ class FlowCoupling(snt.AbstractModule):
             z2 -= shift
             logdet -= local_logdet
 
-
         z = tf.concat([z1, z2], 3)
         return z, logdet
 
@@ -248,24 +249,28 @@ class RevNet2dStep(snt.AbstractModule):
             # z = tf.Print(z, [z], "z_actnorm: ")
         return z, logdet
 
+
 class RevNet(snt.AbstractModule):
-    def __init__(self, depth, net_fn, flow_coupling_type, name="revnet_2d_step"):
+    def __init__(self,
+                 depth,
+                 net_fn,
+                 flow_coupling_type,
+                 name="revnet_2d_step"):
         super(RevNet, self).__init__(name=name)
         with self._enter_variable_scope():
             self.steps = []
             for k in range(depth):
-                self.steps.append(
-                    RevNet2dStep(net_fn, flow_coupling_type))
+                self.steps.append(RevNet2dStep(net_fn, flow_coupling_type))
 
     def _build(self, z, logdet, reverse=False):
-        if reverse: 
+        if reverse:
             local_steps = reversed(self.steps)
         else:
             local_steps = self.steps
 
         for step in local_steps:
             z, logdet = step(z, logdet, reverse=reverse)
-        
+
         # z = tf.Print(z, [z], "z: ")
         # logdet = tf.Print(logdet, [logdet], "logdet: ")
         return z, logdet
@@ -284,7 +289,8 @@ class GlowFlow(snt.AbstractModule):
             self.revnets = []
             self.splits = []
             for i in range(n_levels):
-                self.revnets.append(RevNet(depth_per_level, net_fn, flow_coupling_type))
+                self.revnets.append(
+                    RevNet(depth_per_level, net_fn, flow_coupling_type))
                 self.splits.append(GaussianizeSplit())
 
     def _build(self, z, logdet, reverse=False, eps=None):
@@ -333,8 +339,9 @@ class NormalizingFlows(snt.AbstractModule):
             h += tf.reshape(
                 linear_zeros("y_emb", y_onehot, 2 * n_z), [-1, 1, 1, 2 * n_z])
 
-        pz = tfd.Independent(tfd.MultivariateNormalDiag(
-            loc=h[:, :, :, :n_z], scale_diag=tf.exp(h[:, :, :, n_z:])))
+        pz = tfd.Independent(
+            tfd.MultivariateNormalDiag(
+                loc=h[:, :, :, :n_z], scale_diag=tf.exp(h[:, :, :, n_z:])))
         return pz
 
     def _build(self, x, y_onehot, n_bits_x=8, weight_y=1.0):

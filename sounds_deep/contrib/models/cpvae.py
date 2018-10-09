@@ -19,8 +19,9 @@ def std_gaussian_KL_divergence(mu, sigma):
 
 
 def diagonal_gaussian_kl(mu_p, sigma_p, mu_q, sigma_q):
-    return -tf.reduce_sum(tf.log(sigma_q / sigma_p) + tf.square(sigma_p) + (
-        tf.square(mu_p - mu_q) / (2 * tf.square(sigma_q))) - 0.5)
+    return -tf.reduce_sum(
+        tf.log(sigma_q / sigma_p) + tf.square(sigma_p) +
+        (tf.square(mu_p - mu_q) / (2 * tf.square(sigma_q))) - 0.5)
 
 
 class CPVAE(snt.AbstractModule):
@@ -79,11 +80,13 @@ class CPVAE(snt.AbstractModule):
                 [snt.Linear(latent_dimension), tf.nn.softplus])
 
             self.class_locs = tf.Variable(
-                np.zeros([self._class_num, self._latent_dimension],
-                         dtype=np.float32))
+                np.zeros(
+                    [self._class_num, self._latent_dimension],
+                    dtype=np.float32))
             self.class_scales = tf.Variable(
-                np.ones([self._class_num, self._latent_dimension],
-                        dtype=np.float32))
+                np.ones(
+                    [self._class_num, self._latent_dimension],
+                    dtype=np.float32))
 
             # declare variables for gaussian box inference
             self._lower = tf.Variable(
@@ -153,17 +156,19 @@ class CPVAE(snt.AbstractModule):
 
         return objective
 
-    def posterior_parameters(self, session, label_tensor, batch_num, feed_dict_fn):
+    def posterior_parameters(self, session, label_tensor, batch_num,
+                             feed_dict_fn):
         codes = []
         labels = []
         mu = []
         sigma = []
         for _ in range(batch_num):
-            c, m, s, l = session.run([
-                self.latent_posterior_sample, self.z_mu, self.z_sigma,
-                label_tensor
-            ],
-                                     feed_dict=feed_dict_fn())
+            c, m, s, l = session.run(
+                [
+                    self.latent_posterior_sample, self.z_mu, self.z_sigma,
+                    label_tensor
+                ],
+                feed_dict=feed_dict_fn())
             codes.append(c)
             labels.append(l)
             mu.append(m)
@@ -175,8 +180,10 @@ class CPVAE(snt.AbstractModule):
         sigma = np.array(sigma)
         return mu, sigma, codes, labels
 
-    def aggregate_posterior_parameters(self, session, label_tensor, batch_num, feed_dict_fn):
-        mu, sigma, _, labels = self.posterior_parameters(session, label_tensor, batch_num, feed_dict_fn)
+    def aggregate_posterior_parameters(self, session, label_tensor, batch_num,
+                                       feed_dict_fn):
+        mu, sigma, _, labels = self.posterior_parameters(
+            session, label_tensor, batch_num, feed_dict_fn)
         if len(labels.shape) > 1: labels = np.argmax(labels, axis=1)
         class_locs = np.empty([self._class_num, self._latent_dimension])
         class_scales = np.empty([self._class_num, self._latent_dimension])
@@ -207,11 +214,12 @@ class CPVAE(snt.AbstractModule):
         mu = []
         sigma = []
         for _ in range(batch_num):
-            c, m, s, l = session.run([
-                self.latent_posterior_sample, self.z_mu, self.z_sigma,
-                label_tensor
-            ],
-                                     feed_dict=feed_dict_fn())
+            c, m, s, l = session.run(
+                [
+                    self.latent_posterior_sample, self.z_mu, self.z_sigma,
+                    label_tensor
+                ],
+                feed_dict=feed_dict_fn())
             codes.append(c)
             labels.append(l)
             mu.append(m)

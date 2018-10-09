@@ -9,8 +9,6 @@ Submodules
    sounds_deep.contrib.distributions.dirichlet
    sounds_deep.contrib.distributions.distributions
    sounds_deep.contrib.distributions.gaussian
-   sounds_deep.contrib.distributions.gumbel_softmax
-   sounds_deep.contrib.distributions.joint
    sounds_deep.contrib.distributions.niw
    sounds_deep.contrib.distributions.util
 

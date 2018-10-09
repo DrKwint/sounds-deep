@@ -43,11 +43,7 @@ class HVAE(snt.AbstractModule):
             # Consider using a parameterized GMM prior learned with backprop
             self.latent_prior = prior_fn(latent_dimension)
 
-    def _build(self,
-               inputs,
-               hvar_labels,
-               n_samples=10,
-               analytic_kl=True):
+    def _build(self, inputs, hvar_labels, n_samples=10, analytic_kl=True):
         datum_shape = inputs.get_shape().as_list()[1:]
         enc_repr = self._encoder(inputs)
 
@@ -55,8 +51,11 @@ class HVAE(snt.AbstractModule):
             temperature=self._temperature, logits=hvar_labels)
         self.hvar_posterior = tfd.ExpRelaxedOneHotCategorical(
             temperature=self._temperature, logits=self._hvar(enc_repr))
-        hvar_sample_shape = [n_samples] + self.hvar_posterior.batch_shape.as_list() + self.hvar_posterior.event_shape.as_list()
-        hvar_sample = tf.reshape(self.hvar_posterior.sample(n_samples), hvar_sample_shape)
+        hvar_sample_shape = [n_samples
+                             ] + self.hvar_posterior.batch_shape.as_list(
+                             ) + self.hvar_posterior.event_shape.as_list()
+        hvar_sample = tf.reshape(
+            self.hvar_posterior.sample(n_samples), hvar_sample_shape)
 
         self.latent_posterior = self._latent_posterior_fn(
             self._loc(enc_repr), self._scale(enc_repr))
@@ -101,7 +100,8 @@ class HVAE(snt.AbstractModule):
         hvar_prior = tfd.ExpRelaxedOneHotCategorical(
             temperature=self._temperature, logits=tf.ones(10))
         hvar_sample = hvar_prior.sample()
-        hvar_sample = tf.Print(hvar_sample, [tf.exp(hvar_sample)], summarize=10)
+        hvar_sample = tf.Print(
+            hvar_sample, [tf.exp(hvar_sample)], summarize=10)
         latent_posterior_sample = self.latent_prior.sample()
         joint_sample = tf.concat(
             [hvar_sample, latent_posterior_sample], axis=-1)
