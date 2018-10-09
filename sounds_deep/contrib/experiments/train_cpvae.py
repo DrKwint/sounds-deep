@@ -308,7 +308,7 @@ with tf.Session(config=config) as session:
                 decision_tree_path = os.path.join(args.output_dir, 'decision_tree.pkl')
                 if os.path.exists(decision_tree_path):
                     with open(
-                            decision_tree_path
+                            decision_tree_path,
                             'wb') as dt_file:
                         pickle.dump(model._decision_tree, dt_file)
                 exit_fn.best_class_rate = class_rate
