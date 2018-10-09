@@ -65,7 +65,8 @@ def two_leaf_visualization(c_means, c_sds, classes, active_dims, num_steps=3):
 
 def mean_digit_dim_visualization(c_means, c_sds, active_dims, num_steps=3):
   #Start from "mean digit", show impact of varrying a single dimension in latent space.
-  all_class_mu, all_class_sigma = starting_point([:len(c_means)], c_means, c_sds)
+  classes = np.arrange(len(c_means))
+  all_class_mu, all_class_sigma = starting_point(classes, c_means, c_sds)
   return evaluation_spacing(all_class_mu, all_class_sigma, active_dims, num_steps)
 
 def instance_to_class_visualization(instance, c_means, c_sds, num_steps=3):
