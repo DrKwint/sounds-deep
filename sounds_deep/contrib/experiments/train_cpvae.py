@@ -46,26 +46,17 @@ parser.add_argument('--delta', type=float, default=1.)
 parser.add_argument('--output_dir', type=str, default='./')
 parser.add_argument('--load', action='store_true')
 
-parser.add_argument("--gendim", type=int)
-parser.add_argument("--genval", nargs="*", type=float)
-parser.add_argument(
-    "--startclass",
-    nargs="*",
-    type=int,
-    help=
-    "Single input for one class, multiple for an average of the given classes."
-)
-parser.add_argument("--target", type=int)
-parser.add_argument(
-    "--numsteps",
-    nargs="*",
-    type=int,
-    default=3,
-    help="Number of images generated to each side of the mean.")
-parser.add_argument("--spacing", type=str, default='sd')
-parser.add_argument("--image_dir_name", type=str)
-
+# 2leaf walks from one leaf to another
+# class instance generates a walk from encoded point to class
+parser.add_argument('--viz_task', type=str, choices=['2leaf', 'class_instance'])
+parser.add_argument('--viz_steps', type=int)
+parser.add_argument('--viz_classes', nargs='*', type=int)
+parser.add_argument('--viz_dimension', type=int)
 args = parser.parse_args()
+
+# enforce arg invariants
+if args.viz_task == '2leaf':
+    assert len(args.viz_classes) == 2
 
 # sampled img save directory
 if args.output_dir == './' and 'SLURM_JOB_ID' in os.environ.keys():
@@ -337,3 +328,6 @@ with tf.Session(config=config) as session:
         print(
             eval_cpvae.evaluation_spacing(
                 np.zeros(10), np.ones(10), list(range(10))).shape)
+
+
+        plot_code = lambda latent_code, filename: plot.plot(filename, model.sample(1, None, latent_code=latent_code), 1, 1)
