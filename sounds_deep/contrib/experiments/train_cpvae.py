@@ -238,8 +238,8 @@ with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     base_epoch_val = session.run(base_epoch)
     if args.load:
-        with open(os.path.join(args.output_dir, 'decision_tree.pkl'), 'rb') as dt_file:
-            model._decision_tree = pickle.load(dt_file)
+        # with open(os.path.join(args.output_dir, 'decision_tree.pkl'), 'rb') as dt_file:
+        #     model._decision_tree = pickle.load(dt_file)
         saver.restore(session, os.path.join(args.output_dir, 'model_params'))
         base_epoch_val = session.run(base_epoch)
 
@@ -315,9 +315,11 @@ with tf.Session(config=config) as session:
                 best_test_class_rate = test_class_rate
 
     elif args.task == 'eval':
-        # calculate mu for each node
-        print(model.aggregate_posterior_parameters(session, label_ph, train_batches_per_epoch, train_feed_dict_fn))
-
+        c_means, c_sds = model.aggregate_posterior_parameters(session, label_ph, train_batches_per_epoch, train_feed_dict_fn)
         # write routine to perform walks (discriminative and generative)
         
+
+
+
+
 
