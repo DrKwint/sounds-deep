@@ -1,0 +1,7 @@
+language: python
+python:
+  - "3.6"
+script:
+  - yapf -irp sounds_deep
+  - pylint sounds_deep
+  - pytest
