@@ -1,4 +1,4 @@
-# sounds-deep
+# sounds-deep [![Build Status](https://travis-ci.org/DrKwint/sounds-deep.svg?branch=master)](https://travis-ci.org/DrKwint/sounds-deep)
 
 A library built on top of TensorFlow, Sonnet, and Sacred to faciliate deep learning research.
 
