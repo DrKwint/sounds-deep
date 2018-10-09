@@ -78,9 +78,13 @@ def two_leaf_visualization(c_means,
                            num_steps=3):
     #Start from the average of two classes, varry active_dim(s).
     initial_mu, initial_sigma = starting_point(classes, c_means, c_sds)
-    return evaluation_spacing(initial_mu, initial_sigma, active_dims, None,
+    latent_code = evaluation_spacing(initial_mu, initial_sigma, active_dims, None,
                               num_steps)
-
+    filenames = []
+    for i in range(2*num_steps + 1):
+      filenames[i] = '{}_{}_dim{}'.format(classes[1], classes[2], active_dims)
+      print(filenames[i])
+    return latent_code, filenames
 
 def mean_digit_dim_visualization(c_means, c_sds, active_dims=None,
                                  num_steps=3):
