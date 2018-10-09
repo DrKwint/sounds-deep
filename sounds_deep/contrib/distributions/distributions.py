@@ -11,8 +11,9 @@ def bernoulli_joint_log_likelihood(x_in, re_x):
     '''
     x_in = flatten(x_in)
     re_x = tf.nn.relu(flatten(re_x))
-    return tf.reduce_sum(x_in * tf.log(1e-10 + re_x) +
-                         ((1 - x_in) * tf.log(1e-10 + 1 - re_x)), 1)
+    return tf.reduce_sum(
+        x_in * tf.log(1e-10 + re_x) + ((1 - x_in) * tf.log(1e-10 + 1 - re_x)),
+        1)
 
 
 def discretized_logistic(mean, logscale, binsize=1 / 256.0, sample=None):

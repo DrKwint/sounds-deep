@@ -32,8 +32,8 @@ def run_epoch_ops(session,
         iterable = list(range(steps_per_epoch))
 
     for _ in iterable:
-        out = session.run(
-            [silent_ops, verbose_ops_dict], feed_dict=feed_dict_fn())[1]
+        out = session.run([silent_ops, verbose_ops_dict],
+                          feed_dict=feed_dict_fn())[1]
         verbose_vals = {
             k: v + [np.array(out[k])]
             for k, v in verbose_vals.items()

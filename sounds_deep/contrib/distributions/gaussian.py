@@ -22,8 +22,8 @@ def standard_to_natural(mu, sigma, name='gauss_to_nat'):
 def natural_to_standard(eta1, eta2, name='gauss_to_stndrd'):
     with tf.name_scope(name):
         D = eta2.get_shape().as_list()[-1]
-        sigma = tf.matrix_inverse(
-            -2 * eta2 + tf.eye(D) * np.finfo(np.float32).eps)
+        sigma = tf.matrix_inverse(-2 * eta2 +
+                                  tf.eye(D) * np.finfo(np.float32).eps)
         mu = tf.matmul(sigma, tf.expand_dims(eta1, axis=-1))
         mu = tf.reshape(mu, eta1.get_shape())
         return tf.tuple((mu, sigma), name='stndrd_params')
@@ -73,12 +73,11 @@ def log_probability_nat(x, eta1, eta2, weights=None):
         # log sum exp trick
         with tf.name_scope('log_sum_exp'):
             max_logprob = tf.reduce_max(logprob, axis=1, keep_dims=True)
-            normalizer = tf.add(max_logprob,
-                                tf.log(
-                                    tf.reduce_sum(
-                                        tf.exp(logprob - max_logprob),
-                                        axis=1,
-                                        keepdims=True)))
+            normalizer = tf.add(
+                max_logprob,
+                tf.log(
+                    tf.reduce_sum(
+                        tf.exp(logprob - max_logprob), axis=1, keepdims=True)))
 
         return tf.subtract(logprob, normalizer, name='normalized_logprob')
 

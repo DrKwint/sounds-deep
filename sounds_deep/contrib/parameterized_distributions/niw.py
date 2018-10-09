@@ -125,9 +125,9 @@ class NormalInverseWishart(snt.AbstractModule):
         # Bishop eq 10.60
         beta_k = beta_0 + N_k
         # Bishop eq 10.61
-        m_k = (
-            tf.expand_dims(beta_0, -1) + tf.expand_dims(N_k, axis=-1) * xbar_k
-        ) / tf.expand_dims(beta_k, -1)
+        m_k = (tf.expand_dims(beta_0, -1) +
+               tf.expand_dims(N_k, axis=-1) * xbar_k) / tf.expand_dims(
+                   beta_k, -1)
         # Bishop eq 10.62
         W_k_2nd = tf.expand_dims(tf.expand_dims(N_k, axis=-1), -1) * S_k
         xbar_m0 = tf.reshape(xbar_k - m_0, xbar_k.get_shape().as_list() + [-1])
@@ -146,8 +146,8 @@ class NormalInverseWishart(snt.AbstractModule):
             v_k)
 
         return tf.group([
-            tf.assign(initial,
-                      tf.add(((1 - step_size) * initial),
-                             (step_size * updated)))
+            tf.assign(
+                initial,
+                tf.add(((1 - step_size) * initial), (step_size * updated)))
             for initial, updated in zip(current_vars, updated_params)
         ])

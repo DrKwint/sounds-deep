@@ -179,9 +179,8 @@ def test_classification_rate(session):
     codes = []
     labels = []
     for _ in range(test_batches_per_epoch):
-        c, l = session.run(
-            [model.latent_posterior_sample, label_ph],
-            feed_dict=test_feed_dict_fn())
+        c, l = session.run([model.latent_posterior_sample, label_ph],
+                           feed_dict=test_feed_dict_fn())
         codes.append(c)
         labels.append(l)
     codes = np.squeeze(np.concatenate(codes, axis=1))
@@ -237,9 +236,8 @@ def classification_rate(session, feed_dict_fn, batches):
     codes = []
     labels = []
     for _ in range(batches):
-        c, l = session.run(
-            [model.latent_posterior_sample, label_ph],
-            feed_dict=feed_dict_fn())
+        c, l = session.run([model.latent_posterior_sample, label_ph],
+                           feed_dict=feed_dict_fn())
         codes.append(c)
         labels.append(l)
     codes = np.squeeze(np.concatenate(codes, axis=1))

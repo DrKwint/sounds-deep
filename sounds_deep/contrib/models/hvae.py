@@ -61,8 +61,8 @@ class HVAE(snt.AbstractModule):
             self._loc(enc_repr), self._scale(enc_repr))
         latent_posterior_sample = self.latent_posterior.sample(n_samples)
 
-        joint_sample = tf.concat(
-            [hvar_sample, latent_posterior_sample], axis=-1)
+        joint_sample = tf.concat([hvar_sample, latent_posterior_sample],
+                                 axis=-1)
 
         sample_decoder = snt.BatchApply(self._decoder)
         self.output_distribution = tfd.Independent(
@@ -103,7 +103,7 @@ class HVAE(snt.AbstractModule):
         hvar_sample = tf.Print(
             hvar_sample, [tf.exp(hvar_sample)], summarize=10)
         latent_posterior_sample = self.latent_prior.sample()
-        joint_sample = tf.concat(
-            [hvar_sample, latent_posterior_sample], axis=-1)
+        joint_sample = tf.concat([hvar_sample, latent_posterior_sample],
+                                 axis=-1)
         joint_sample = tf.expand_dims(joint_sample, 0)
         return self._decoder(joint_sample)

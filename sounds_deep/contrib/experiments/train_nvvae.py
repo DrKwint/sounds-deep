@@ -116,9 +116,10 @@ elif args.dataset == 'mnist':
     encoder_module = snt.nets.ConvNet2D([32, 64, 128], [5], [2], [snt.SAME])
     decoder_module = snt.Sequential([
         snt.Linear(64), lambda x: tf.reshape(x, [-1, 2, 2, 16]),
-        snt.nets.ConvNet2DTranspose([128, 64, 32, 32], [(4, 4), (8, 8),
-                                                        (16, 16), (32, 32)],
-                                    [5], [2], [snt.SAME]),
+        snt.nets.ConvNet2DTranspose([128, 64, 32, 32], [(4, 4),
+                                                        (8, 8), (16, 16),
+                                                        (32, 32)], [5], [2],
+                                    [snt.SAME]),
         lambda x: tf.reshape(x, [-1, 32 * 32 * 32]),
         snt.Linear(28 * 28), lambda x: tf.reshape(x, [-1, 28, 28, 1])
     ])

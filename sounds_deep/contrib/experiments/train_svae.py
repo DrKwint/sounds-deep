@@ -101,9 +101,9 @@ with tf.Session(config=config) as session:
         regularizer = np.mean(out_dict['regularizer_term'])
         bits_per_dim = mean_elbo / (np.log(2.) * num_pixels)
         print(
-            'BITS/DIM: {:.3f}\tELBO: {:.3f}\tRecon: {:.3f}\tRegularizer: {:.3f}\tlog_numerator: {:.3f}\tlog_denominator: {:.3f}'.
-            format(bits_per_dim, mean_elbo, recon_error, regularizer,
-                   weighted_log_numerator, weighted_log_denominator))
+            'BITS/DIM: {:.3f}\tELBO: {:.3f}\tRecon: {:.3f}\tRegularizer: {:.3f}\tlog_numerator: {:.3f}\tlog_denominator: {:.3f}'
+            .format(bits_per_dim, mean_elbo, recon_error, regularizer,
+                    weighted_log_numerator, weighted_log_denominator))
         # print(out_dict['grads'])
 
         fig, ax = plt.subplots(tight_layout=True)

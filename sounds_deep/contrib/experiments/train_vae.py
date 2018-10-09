@@ -128,9 +128,9 @@ with tf.Session(config=config) as session:
             np.log(2.) * reduce(operator.mul, data_shape[-3:]))
         print(
             "bits per dim: {:7.5f}\tdistortion: {:7.5f}\trate: {:7.5f}\tprior_logp: \
-            {:7.5f}\tposterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}"
-            .format(bits_per_dim, mean_distortion, mean_rate, mean_prior_logp,
-                    mean_posterior_logp, mean_elbo, mean_iw_elbo))
+            {:7.5f}\tposterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}".
+            format(bits_per_dim, mean_distortion, mean_rate, mean_prior_logp,
+                   mean_posterior_logp, mean_elbo, mean_iw_elbo))
 
         generated_img = session.run(sample)
         for i in range(generated_img.shape[0]):

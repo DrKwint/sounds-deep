@@ -79,8 +79,8 @@ def actnorm_scale(name,
     logs = get_variable_ddi(
         "logs",
         _shape,
-        initial_value=tf.log(scale / (
-            tf.sqrt(x_var) + 1e-6)) / logscale_factor) * logscale_factor
+        initial_value=tf.log(scale / (tf.sqrt(x_var) + 1e-6)) /
+        logscale_factor) * logscale_factor
     if not reverse:
         # logs = tf.Print(logs, [tf.exp(logs)], "actnorm scale: ")
         x = x * tf.exp(logs)

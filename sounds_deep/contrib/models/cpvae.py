@@ -80,13 +80,11 @@ class CPVAE(snt.AbstractModule):
                 [snt.Linear(latent_dimension), tf.nn.softplus])
 
             self.class_locs = tf.Variable(
-                np.zeros(
-                    [self._class_num, self._latent_dimension],
-                    dtype=np.float32))
+                np.zeros([self._class_num, self._latent_dimension],
+                         dtype=np.float32))
             self.class_scales = tf.Variable(
-                np.ones(
-                    [self._class_num, self._latent_dimension],
-                    dtype=np.float32))
+                np.ones([self._class_num, self._latent_dimension],
+                        dtype=np.float32))
 
             # declare variables for gaussian box inference
             self._lower = tf.Variable(
@@ -163,12 +161,11 @@ class CPVAE(snt.AbstractModule):
         mu = []
         sigma = []
         for _ in range(batch_num):
-            c, m, s, l = session.run(
-                [
-                    self.latent_posterior_sample, self.z_mu, self.z_sigma,
-                    label_tensor
-                ],
-                feed_dict=feed_dict_fn())
+            c, m, s, l = session.run([
+                self.latent_posterior_sample, self.z_mu, self.z_sigma,
+                label_tensor
+            ],
+                                     feed_dict=feed_dict_fn())
             codes.append(c)
             labels.append(l)
             mu.append(m)
@@ -214,12 +211,11 @@ class CPVAE(snt.AbstractModule):
         mu = []
         sigma = []
         for _ in range(batch_num):
-            c, m, s, l = session.run(
-                [
-                    self.latent_posterior_sample, self.z_mu, self.z_sigma,
-                    label_tensor
-                ],
-                feed_dict=feed_dict_fn())
+            c, m, s, l = session.run([
+                self.latent_posterior_sample, self.z_mu, self.z_sigma,
+                label_tensor
+            ],
+                                     feed_dict=feed_dict_fn())
             codes.append(c)
             labels.append(l)
             mu.append(m)

@@ -30,8 +30,8 @@ def define_model(data_shape, latent_dimension):
     decoder_module = snt.nets.MLP([200, 200, 784])
 
     def prior_fn(latent_dimension):
-        cov_init = util.positive_definate_initializer(
-            [10] + [latent_dimension] * 2)
+        cov_init = util.positive_definate_initializer([10] +
+                                                      [latent_dimension] * 2)
         eigvals = tf.self_adjoint_eig(
             tf.divide(
                 cov_init + tf.matrix_transpose(cov_init),
