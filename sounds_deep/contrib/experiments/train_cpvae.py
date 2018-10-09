@@ -7,6 +7,7 @@ import argparse
 import operator
 from functools import reduce
 import json
+import pickle
 
 import numpy as np
 import sonnet as snt
@@ -217,6 +218,17 @@ verbose_ops_dict['posterior_logp'] = model.posterior_logp
 verbose_ops_dict['classification_loss'] = model.classification_loss
 
 
+def classification_rate(session, feed_dict_fn, batches):
+    codes = []
+    labels = []
+    for _ in range(batches):
+        c, l = session.run([model.latent_posterior_sample, label_ph], feed_dict=feed_dict_fn())
+        codes.append(c)
+        labels.append(l)
+    codes = np.squeeze(np.concatenate(codes, axis=1))
+    labels = np.argmax(np.concatenate(labels), axis=1)
+    return decision_tree.score(codes, labels)
+
 saver = tf.train.Saver()
 
 config = tf.ConfigProto()
@@ -226,23 +238,12 @@ with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     base_epoch_val = session.run(base_epoch)
     if args.load:
+        with open(os.path.join(args.output_dir, 'decision_tree.pkl'), 'rb') as dt_file:
+            model._decision_tree = pickle.load(dt_file)
         saver.restore(session, os.path.join(args.output_dir, 'model_params'))
         base_epoch_val = session.run(base_epoch)
-        train_class_rate = 1. - model.update(
-            session,
-            label_ph,
-            args.update_samples * train_batches_per_epoch,
-            train_feed_dict_fn,
-            base_epoch_val,
-            output_dir=args.output_dir)
-    
-    if args.task == 'eval':
-        print("okay")
-        class_locs, class_scales = model.aggregate_posterior_parameters(session, label_ph, train_batches_per_epoch, train_feed_dict_fn)
-        print("Loc dimensions: {}".format(class_locs.shape))
-        print("Scale dimensions: {}".format(class_scales.shape))
-        print(class_locs, class_scales)
-    else:
+
+    if args.task == 'train':
         def run(phase, steps, feed_dict_fn, verbose=True):
             if phase not in ['TRAIN', 'TEST']:
                 print("phase must be TRAIN or TEST")
@@ -250,7 +251,11 @@ with tf.Session(config=config) as session:
             print(phase)
 
             silent_ops = [train_op] if phase == 'TRAIN' else []
-            class_rate = test_classification_rate(session) if phase == 'TEST' else train_class_rate
+
+            if phase == 'TRAIN':
+                class_rate = classification_rate(session, train_feed_dict_fn, train_batches_per_epoch)
+            elif phase == 'TEST':
+                class_rate = classification_rate(session, test_feed_dict_fn, test_batches_per_epoch)
 
             out_dict = util.run_epoch_ops(
                 session,
@@ -304,4 +309,15 @@ with tf.Session(config=config) as session:
                 print('Saving model parameters at {} test classification rate'.format(test_class_rate))
                 session.run([tf.assign(base_epoch, epoch)])
                 saver.save(session, os.path.join(args.output_dir, 'model_params'))
+
+                with open(os.path.join(args.output_dir, 'decision_tree.pkl'), 'wb') as dt_file:
+                    pickle.dump(model._decision_tree, dt_file)
                 best_test_class_rate = test_class_rate
+
+    elif args.task == 'eval':
+        # calculate mu for each node
+        print(model.aggregate_posterior_parameters(session, label_ph, train_batches_per_epoch, train_feed_dict_fn))
+
+        # write routine to perform walks (discriminative and generative)
+        
+
