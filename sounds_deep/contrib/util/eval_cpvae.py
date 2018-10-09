@@ -15,9 +15,16 @@ import sounds_deep.contrib.util.util as util
 
 
 def convolve_gaussians(mu, sigma):
-    #Takes np.arrays as input, assumes the distributions are equally weighted.
-    mu_hat = np.mean(mu)
-    sigma_hat = np.mean(np.square(mu) + np.square(sigma)) - np.square(mu_hat)
+    """
+    Combine gaussian parameters with assumption that each gaussian is weighted
+    equally
+
+    Args
+        mu: list of np.array
+        sigma: list of np.array
+    """
+    mu_hat = np.mean(mu, axis=0)
+    sigma_hat = np.mean(np.square(mu) + np.square(sigma), axis=0) - np.square(mu_hat)
     return mu_hat, sigma_hat
 
 
@@ -60,8 +67,7 @@ def evaluation_spacing(mu, sigma, active_dims, target_mu=None, num_steps=3):
 def two_leaf_visualization(c_means, c_sds, classes, active_dims, num_steps=3):
     #Start from the average of two classes, varry active_dim(s).
     initial_mu, initial_sigma = starting_point(classes, c_means, c_sds)
-    return evaluation_spacing(initial_mu, initial_sigma, active_dims,
-                              num_steps)
+    return evaluation_spacing(initial_mu, initial_sigma, active_dims, None, num_steps)
 
 
 def mean_digit_dim_visualization(c_means, c_sds, active_dims, num_steps=3):
@@ -72,6 +78,8 @@ def mean_digit_dim_visualization(c_means, c_sds, active_dims, num_steps=3):
                               num_steps)
 
 
-def instance_to_class_visualization(instance, c_means, c_sds, num_steps=3):
-    #Celebrity baby from instnace to actual class.
-    pass
+def instance_to_class_visualization(instance_mu, instance_sigma, c_means, c_sds, target_c, num_steps=3):
+    #Celebrity baby from instance to actual class.
+    target_mu = c_means[target_c]
+    active_dims = np.arrange(len(instance_mu))
+    return evaluation_spacing(instance_mu, instance_sigma, active_dims, target_mu, num_steps)
