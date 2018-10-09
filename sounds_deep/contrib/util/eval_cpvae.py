@@ -57,6 +57,7 @@ def evaluation_spacing(mu,
     # zero for non-active dimensions
     mask = np.zeros_like(step_delta)
     if active_dims:
+        if type(active_dims) is not list: active_dims = [active_dims]
         for i in active_dims:
             mask[i] = 1
     else:
@@ -76,15 +77,19 @@ def two_leaf_visualization(c_means,
                            classes,
                            active_dims=None,
                            num_steps=3):
+    assert len(classes) == 2
     #Start from the average of two classes, varry active_dim(s).
     initial_mu, initial_sigma = starting_point(classes, c_means, c_sds)
-    latent_code = evaluation_spacing(initial_mu, initial_sigma, active_dims, None,
-                              num_steps)
-    filenames = []
-    for i in range(2*num_steps + 1):
-      filenames[i] = '{}_{}_dim{}'.format(classes[1], classes[2], active_dims)
-      print(filenames[i])
+    latent_code = evaluation_spacing(initial_mu, initial_sigma, active_dims,
+                                     None, num_steps)
+
+    filenames = [
+        '{}_{}_dim{}'.format(classes[0], classes[1], active_dims)
+        for _ in range(2 * num_steps + 1)
+    ]
+    print(filenames)
     return latent_code, filenames
+
 
 def mean_digit_dim_visualization(c_means, c_sds, active_dims=None,
                                  num_steps=3):

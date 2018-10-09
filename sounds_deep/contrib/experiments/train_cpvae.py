@@ -48,7 +48,8 @@ parser.add_argument('--load', action='store_true')
 
 # 2leaf walks from one leaf to another
 # class instance generates a walk from encoded point to class
-parser.add_argument('--viz_task', type=str, choices=['2leaf', 'class_instance'])
+parser.add_argument(
+    '--viz_task', type=str, choices=['2leaf', 'class_instance'])
 parser.add_argument('--viz_steps', type=int, default=3)
 parser.add_argument('--viz_classes', nargs='*', type=int)
 parser.add_argument('--viz_dimension', type=int, default=None)
@@ -306,11 +307,10 @@ with tf.Session(config=config) as session:
                 saver.save(session,
                            os.path.join(args.output_dir, 'model_params'))
 
-                decision_tree_path = os.path.join(args.output_dir, 'decision_tree.pkl')
+                decision_tree_path = os.path.join(args.output_dir,
+                                                  'decision_tree.pkl')
                 if os.path.exists(decision_tree_path):
-                    with open(
-                            decision_tree_path,
-                            'wb') as dt_file:
+                    with open(decision_tree_path, 'wb') as dt_file:
                         pickle.dump(model._decision_tree, dt_file)
                 exit_fn.best_class_rate = class_rate
             # not currently doing early stopping
@@ -321,9 +321,8 @@ with tf.Session(config=config) as session:
 
     elif args.task == 'eval':
         # calculate mu for each node
-        c_means, c_sds = model.aggregate_posterior_parameters(session, label_ph,
-                                                 train_batches_per_epoch,
-                                                 train_feed_dict_fn)
+        c_means, c_sds = model.aggregate_posterior_parameters(
+            session, label_ph, train_batches_per_epoch, train_feed_dict_fn)
 
         # write routine to perform walks (discriminative and generative)
 
@@ -332,10 +331,12 @@ with tf.Session(config=config) as session:
         #         np.zeros(10), np.ones(10), list(range(10))).shape)
 
         if args.viz_task == '2leaf':
-            classes, dims = np.asarray(args.viz_classes), np.asarray(args.viz_dimension)
-            latent_codes, filenames = eval_cpvae.two_leaf_visualization(c_means, c_sds, classes, dims, args.viz_steps)
+            classes, dims = np.asarray(args.viz_classes), np.asarray(
+                args.viz_dimension)
+            latent_codes, filenames = eval_cpvae.two_leaf_visualization(
+                c_means, c_sds, classes, dims, args.viz_steps)
 
         for latent_code in latent_codes:
             plot_code = lambda latent_code, filename: plot.plot(filename, model.sample(1, None, latent_code=latent_code), 1, 1)
 
-        #python sounds_deep/contrib/experiments/train_cpvae.py --task eval --output_dir cpvae_16177836/ --load --update_samples 1 --viz_task 2leaf --viz_classes 4 9 --viz_dimension 26    
+        #python sounds_deep/contrib/experiments/train_cpvae.py --task eval --output_dir cpvae_16177836/ --load --update_samples 1 --viz_task 2leaf --viz_classes 4 9 --viz_dimension 26
