@@ -4,6 +4,7 @@ from sounds_deep.contrib.util.util import int_shape
 
 LOGSCALE_FACTOR = 0.01
 
+
 def actnorm(name,
             x,
             scale=1.,
@@ -15,13 +16,13 @@ def actnorm(name,
             trainable=True):
     if not reverse:
         x = actnorm_center(name + "_center", x, reverse)
-        x = actnorm_scale(name + "_scale", x, scale, logdet,
-                            logscale_factor, batch_variance, reverse, init)
+        x = actnorm_scale(name + "_scale", x, scale, logdet, logscale_factor,
+                          batch_variance, reverse, init)
         if logdet != None:
             x, logdet = x
     else:
-        x = actnorm_scale(name + "_scale", x, scale, logdet,
-                            logscale_factor, batch_variance, reverse, init)
+        x = actnorm_scale(name + "_scale", x, scale, logdet, logscale_factor,
+                          batch_variance, reverse, init)
         if logdet != None:
             x, logdet = x
         x = actnorm_center(name + "_center", x, reverse)
@@ -95,7 +96,13 @@ def actnorm_scale(name,
 
     return x
 
-def get_variable_ddi(name, shape, initial_value, dtype=tf.float32, init=False, trainable=True):
+
+def get_variable_ddi(name,
+                     shape,
+                     initial_value,
+                     dtype=tf.float32,
+                     init=False,
+                     trainable=True):
     w = tf.get_variable(name, shape, dtype, None, trainable=trainable)
     if init:
         w = w.assign(initial_value)

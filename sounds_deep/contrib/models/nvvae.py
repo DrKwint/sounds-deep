@@ -49,13 +49,11 @@ class NamedLatentVAE(snt.AbstractModule):
         y_posterior_sample_unlabeled = y_posterior_unlabeled.sample(n_samples)
         self.y_posterior_sample_unlabeled = y_posterior_sample_unlabeled
 
-        nv_predicted = tf.concat(
-            [
-                tf.tile(
-                    tf.expand_dims(hvar_labels, axis=0), [n_samples, 1, 1]),
-                tf.exp(y_posterior_sample_unlabeled)
-            ],
-            axis=1)
+        nv_predicted = tf.concat([
+            tf.tile(tf.expand_dims(hvar_labels, axis=0), [n_samples, 1, 1]),
+            tf.exp(y_posterior_sample_unlabeled)
+        ],
+                                 axis=1)
         self.y_prior_labeled = tfd.ExpRelaxedOneHotCategorical(
             y_posterior_temperature, logits=tf.ones_like(hvar_labels))
         self.y_prior_unlabeled = tfd.ExpRelaxedOneHotCategorical(
@@ -142,12 +140,10 @@ class NamedLatentVAE(snt.AbstractModule):
         y_channel = tf.tile(
             tf.expand_dims(tf.expand_dims(y, 2), 2),
             [1, 1, x_shape[1], x_shape[2], 1])
-        z_encoder_input = tf.concat(
-            [
-                tf.tile(tf.expand_dims(x, 0), [y_shape[0], 1, 1, 1, 1]),
-                y_channel
-            ],
-            axis=4)
+        z_encoder_input = tf.concat([
+            tf.tile(tf.expand_dims(x, 0), [y_shape[0], 1, 1, 1, 1]), y_channel
+        ],
+                                    axis=4)
         z_repr = snt.BatchApply(self._z_net)(z_encoder_input)
         z_repr = snt.BatchFlatten(preserve_dims=2)(z_repr)
         batch_loc = snt.BatchApply(self._loc)

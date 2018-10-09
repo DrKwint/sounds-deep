@@ -19,8 +19,9 @@ def std_gaussian_KL_divergence(mu, sigma):
 
 
 def diagonal_gaussian_kl(mu_p, sigma_p, mu_q, sigma_q):
-    return -tf.reduce_sum(tf.log(sigma_q / sigma_p) + tf.square(sigma_p) + (
-        tf.square(mu_p - mu_q) / (2 * tf.square(sigma_q))) - 0.5)
+    return -tf.reduce_sum(
+        tf.log(sigma_q / sigma_p) + tf.square(sigma_p) +
+        (tf.square(mu_p - mu_q) / (2 * tf.square(sigma_q))) - 0.5)
 
 
 class CPVAE(snt.AbstractModule):
@@ -153,7 +154,8 @@ class CPVAE(snt.AbstractModule):
 
         return objective
 
-    def posterior_parameters(self, session, label_tensor, batch_num, feed_dict_fn):
+    def posterior_parameters(self, session, label_tensor, batch_num,
+                             feed_dict_fn):
         codes = []
         labels = []
         mu = []
@@ -175,8 +177,10 @@ class CPVAE(snt.AbstractModule):
         sigma = np.array(sigma)
         return mu, sigma, codes, labels
 
-    def aggregate_posterior_parameters(self, session, label_tensor, batch_num, feed_dict_fn):
-        mu, sigma, _, labels = self.posterior_parameters(session, label_tensor, batch_num, feed_dict_fn)
+    def aggregate_posterior_parameters(self, session, label_tensor, batch_num,
+                                       feed_dict_fn):
+        mu, sigma, _, labels = self.posterior_parameters(
+            session, label_tensor, batch_num, feed_dict_fn)
         if len(labels.shape) > 1: labels = np.argmax(labels, axis=1)
         class_locs = np.empty([self._class_num, self._latent_dimension])
         class_scales = np.empty([self._class_num, self._latent_dimension])
@@ -288,5 +292,5 @@ class CPVAE(snt.AbstractModule):
             loc = tf.matmul(cluster_ids, self.class_locs, a_is_sparse=True)
             scale = tf.matmul(cluster_ids, self.class_scales, a_is_sparse=True)
             latent_code = epsilon * scale + loc
-            output = self._decoder(latent_code)
-            return self._output_dist_fn(output).mean()
+        output = self._decoder(latent_code)
+        return self._output_dist_fn(output).mean()

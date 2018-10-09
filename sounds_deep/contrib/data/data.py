@@ -53,11 +53,13 @@ def load_mnist(data_dir):
         data_dir, normalize=True, flatten=True, one_hot_label=True)
     return train_data, train_labels, test_data, test_labels
 
+
 def load_fmnist(data_dir):
     import sounds_deep.contrib.data.fmnist as fmnist
     (train_data, train_labels), (test_data, test_labels) = fmnist.load_fmnist(
         data_dir, normalize=True, flatten=True, one_hot_label=True)
     return train_data, train_labels, test_data, test_labels
+
 
 def load_cifar10(data_dir):
     import sounds_deep.contrib.data.cifar10 as cifar10

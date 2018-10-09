@@ -1,8 +1,6 @@
 import tensorflow as tf
 import sonnet as snt
 
-import functools
-
 tfd = tf.contrib.distributions
 tfb = tfd.bijectors
 

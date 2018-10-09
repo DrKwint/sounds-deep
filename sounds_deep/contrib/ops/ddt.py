@@ -4,7 +4,10 @@ import tensorflow as tf
 from sklearn import tree
 
 
-def get_decision_tree_boundaries(tree, feature_num, class_num, boundary_val=100):
+def get_decision_tree_boundaries(tree,
+                                 feature_num,
+                                 class_num,
+                                 boundary_val=100):
     """ 
     Args:
         tree (sklearn.tree.DecisionTree):
@@ -31,7 +34,9 @@ def get_decision_tree_boundaries(tree, feature_num, class_num, boundary_val=100)
     values = np.empty((node_num, class_num))
 
     # subroutine to define boxes with depth first walk
-    def dfs(idx=0, lower=[-boundary_val] * feature_num, upper=[boundary_val] * feature_num):
+    def dfs(idx=0,
+            lower=[-boundary_val] * feature_num,
+            upper=[boundary_val] * feature_num):
         """
         Args:
             idx: 
@@ -76,7 +81,8 @@ class TransductiveBoxInference(snt.AbstractModule):
     """
 
     def __init__(self, distribution=tf.contrib.distributions.Normal):
-        super(TransductiveBoxInference, self).__init__(name="TransductiveBoxInference")
+        super(TransductiveBoxInference,
+              self).__init__(name="TransductiveBoxInference")
         self._distribution = distribution
 
     def _build(self, mu, sigma, lower_bounds, upper_bounds, values):
@@ -97,11 +103,11 @@ class TransductiveBoxInference(snt.AbstractModule):
             tf.expand_dims(upper_bounds, 0), [tf.shape(mu)[0], 1, 1])
 
         # integral over CDF between bounds per dimension, rectifying for numerical error
-        # in the tails of the CDF 
+        # in the tails of the CDF
         dist = tf.contrib.distributions.Normal(mu, sigma, True, False)
         dim_probs = tf.nn.relu(dist.cdf(upper_bounds) - dist.cdf(lower_bounds))
 
-        # for each box, calculate probability that a sample falls in 
+        # for each box, calculate probability that a sample falls in
         # as we assume the Gaussian has diagonal covariance, this is a product
         box_prob = tf.reduce_prod(dim_probs, axis=2)
 

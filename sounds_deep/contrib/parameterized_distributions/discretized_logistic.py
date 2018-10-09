@@ -35,4 +35,4 @@ class DiscretizedLogistic(snt.AbstractModule, tfd.Distribution):
         sample = (tf.floor(sample / binsize) * binsize - mean) / scale
         logp = tf.log(
             tf.sigmoid(sample + binsize / scale) - tf.sigmoid(sample) + 1e-7)
-        return logp # tf.reduce_sum(logp, [2, 3, 4])
+        return logp  # tf.reduce_sum(logp, [2, 3, 4])

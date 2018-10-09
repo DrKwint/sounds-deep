@@ -31,14 +31,27 @@ def starting_point(start_classes, c_means, c_stddev):
     #Gives the starting "average digit" of the classees given in start_classes
 
 
-def evaluation_spacing(start_mu, start_sigma, spacing='sd', num_steps=5):
-    if spacing == 'uniform':
-        assert False, "This is unimplemented!"
-    else:
-        sds = np.linspace(-1 * num_steps, num_steps, num=(2 * num_steps + 1))
-        #e.g. numsteps=3, sds=[-3,-2,1,0,1,2,3]
-        intermediate_dim_values = np.full_like(sds, start_mu)
-        for x in range(len(intermediate_dim_values)):
-            intermediate_dim_values[x] += start_sigma * sds[x]
+def evaluation_spacing(mu, sigma, active_dims, target_mu=None, num_steps=5):
+    """
+    If target_mu is None, standard deviations are used, otherwise steps are
+    uniform between mu and target
+    """
+    # generate integer steps
+    idxs = np.linspace(-1 * num_steps, num_steps, num=(2 * num_steps + 1))
 
-        return intermediate_dim_values
+    # calculate the delta each step should take
+    step_delta = (target_mu - mu) / num_steps if target_mu else sigma
+
+    # zero for non-active dimensions
+    mask = np.zeros_like(step_delta)
+    for i in active_dims:
+        mask[i] = 1
+    step_delta *= mask
+
+    # calculate total displacement for each number of steps
+    displacement = np.stack([step_delta * i for i in idxs])
+
+    # apply displacement
+    step_vals = mu + displacement
+
+    return step_vals

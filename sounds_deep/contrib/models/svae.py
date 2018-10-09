@@ -38,10 +38,9 @@ def compute_log_z_given_y(eta1_phi1,
                 eta2_phi2, axis=0))
 
         # w_eta2 = -0.5 * inv(sigma_phi1 + sigma_phi2)
-        solved = tf.matrix_solve(eta2_phi_tilde,
-                                 tf.tile(
-                                     tf.expand_dims(eta2_phi2, axis=0),
-                                     [N, 1, 1, 1]))
+        solved = tf.matrix_solve(
+            eta2_phi_tilde,
+            tf.tile(tf.expand_dims(eta2_phi2, axis=0), [N, 1, 1, 1]))
         w_eta2 = tf.einsum('nju,nkui->nkij', eta2_phi1, solved)
 
         # for nummerical stability...
@@ -98,13 +97,12 @@ def subsample_x(x_k_samples, log_q_z_given_y, seed=0):
         z_samps = tf.cast(z_samps, dtype=tf.int32)
 
         # tensor of shape (N, S, 3), containing indices of all chosen samples
-        choices = tf.concat(
-            [
-                tf.expand_dims(n_idx, 2),
-                tf.expand_dims(z_samps, 2),
-                tf.expand_dims(s_idx, 2)
-            ],
-            axis=2)
+        choices = tf.concat([
+            tf.expand_dims(n_idx, 2),
+            tf.expand_dims(z_samps, 2),
+            tf.expand_dims(s_idx, 2)
+        ],
+                            axis=2)
 
         return tf.gather_nd(x_k_samples, choices, name='x_samples')
 

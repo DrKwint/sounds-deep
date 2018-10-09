@@ -15,9 +15,8 @@ import tensorflow as tf
 import sounds_deep.contrib.data.data as data
 import sounds_deep.contrib.util.plot as plot
 import sounds_deep.contrib.util.util as util
-from sounds_deep.contrib.models.normalizing_flows import (GlowFlow,
-                                                          NormalizingFlows,
-                                                          glow_net_fn)
+from sounds_deep.contrib.models.normalizing_flows import (
+    GlowFlow, NormalizingFlows, glow_net_fn)
 
 parser = argparse.ArgumentParser(description='Train a Glow model.')
 parser.add_argument('--dataset', type=str, default='mnist')
@@ -89,8 +88,10 @@ with tf.variable_scope(tf.get_variable_scope()):
                 objective_list.append(objective)
                 stats_dict_list.append(stats_dict)
 
-average_grads = util.average_gradients([optimizer.compute_gradients(obj) for obj in objective_list])
+average_grads = util.average_gradients(
+    [optimizer.compute_gradients(obj) for obj in objective_list])
 train_op = optimizer.apply_gradients(average_grads)
+
 
 def feed_dict_fn():
     feed_dict = dict()
@@ -99,6 +100,7 @@ def feed_dict_fn():
         feed_dict[data_ph] = arrays[0]
         feed_dict[label_ph] = arrays[1]
     return feed_dict
+
 
 # setup sampling
 sample_label_ph = tf.placeholder(tf.int32, shape=(16))

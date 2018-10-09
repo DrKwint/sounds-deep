@@ -15,18 +15,21 @@ import sounds_deep.contrib.data.data as data
 import sounds_deep.contrib.models.nvvae as nvvae
 import sounds_deep.contrib.util as util
 
-parser = argparse.ArgumentParser(description='Train a Named Variable VAE model.')
+parser = argparse.ArgumentParser(
+    description='Train a Named Variable VAE model.')
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--latent_dimension', type=int, default=32)
 parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--learning_rate', type=float, default=0.001)
 args = parser.parse_args()
 
+
 def apply_temp(a, temperature=1.0):
     # helper function to sample an index from a probability array
     a = tf.log(a) / temperature
     a = tf.exp(a) / tf.reduce_sum(tf.exp(a), axis=1, keepdims=True)
     return a
+
 
 # celebA data
 # idxable, train_idxs, test_idxs, attributes = data.load_celeba('./sounds_deep/contrib/data/')
@@ -38,13 +41,19 @@ train_data, train_labels, _, _ = data.load_mnist('./data/')
 data_shape = (args.batch_size, ) + train_data.shape[1:]
 label_shape = (args.batch_size, ) + train_labels.shape[1:]
 batches_per_epoch = train_data.shape[0] // args.batch_size
-train_gen = data.parallel_data_generator([train_data, train_labels], args.batch_size)
+train_gen = data.parallel_data_generator([train_data, train_labels],
+                                         args.batch_size)
 
 # build the model
 temp_ph = tf.placeholder(tf.float32)
 encoder_module = snt.nets.MLP([200, 200])
 decoder_module = snt.nets.MLP([200, 200, 784])
-model = hvae.HVAE(args.latent_dimension, encoder_module, decoder_module, hvar_shape=10, temperature=temp_ph)
+model = hvae.HVAE(
+    args.latent_dimension,
+    encoder_module,
+    decoder_module,
+    hvar_shape=10,
+    temperature=temp_ph)
 
 # build model
 data_ph = tf.placeholder(tf.float32, shape=data_shape)
@@ -74,13 +83,15 @@ with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     temperature = .7
     for epoch in range(args.epochs):
+
         def feed_dict_fn():
             feed_dict = dict()
             arrays = next(train_gen)
             feed_dict[data_ph] = arrays[0]
             feed_dict[label_ph] = arrays[1]
-            feed_dict[temp_ph] = temperature # float(1. / (epoch + 1))
+            feed_dict[temp_ph] = temperature  # float(1. / (epoch + 1))
             return feed_dict
+
         print(len(feed_dict_fn()))
         print(feed_dict_fn().keys())
         exit()
@@ -108,6 +119,8 @@ with tf.Session(config=config) as session:
         print("bits per dim: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}".format(
             bits_per_dim, mean_elbo, mean_iw_elbo))
 
-        generated_img = session.run(sample_img, feed_dict={temp_ph: temperature})
+        generated_img = session.run(
+            sample_img, feed_dict={temp_ph: temperature})
         for i in range(generated_img.shape[0]):
-            scipy.misc.toimage(generated_img[i]).save('epoch{}_{}.jpg'.format(epoch, i))
+            scipy.misc.toimage(generated_img[i]).save('epoch{}_{}.jpg'.format(
+                epoch, i))

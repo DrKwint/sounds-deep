@@ -25,7 +25,8 @@ import sounds_deep.contrib.util.plot as plot
 import sounds_deep.contrib.util.eval_cpvae as eval_cpvae
 
 parser = argparse.ArgumentParser(description='Train a VAE model.')
-parser.add_argument('--task', type=str, default='train', choices=['train', 'eval'])
+parser.add_argument(
+    '--task', type=str, default='train', choices=['train', 'eval'])
 
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--latent_dimension', type=int, default=50)
@@ -47,9 +48,20 @@ parser.add_argument('--load', action='store_true')
 
 parser.add_argument("--gendim", type=int)
 parser.add_argument("--genval", nargs="*", type=float)
-parser.add_argument("--startclass", nargs="*", type=int, help="Single input for one class, multiple for an average of the given classes.")
+parser.add_argument(
+    "--startclass",
+    nargs="*",
+    type=int,
+    help=
+    "Single input for one class, multiple for an average of the given classes."
+)
 parser.add_argument("--target", type=int)
-parser.add_argument("--numsteps", nargs="*", type=int, default=3, help="Number of images generated to each side of the mean.")
+parser.add_argument(
+    "--numsteps",
+    nargs="*",
+    type=int,
+    default=3,
+    help="Number of images generated to each side of the mean.")
 parser.add_argument("--spacing", type=str, default='sd')
 parser.add_argument("--image_dir_name", type=str)
 
@@ -131,8 +143,7 @@ if args.dataset == 'cifar10':
         snt.Conv2D(32, 3),
         snt.Residual(snt.Conv2D(32, 3)),
         snt.Residual(snt.Conv2D(32, 3))
-    ] * 5 +
-    [snt.Conv2D(3, 3)])
+    ] * 5 + [snt.Conv2D(3, 3)])
     output_distribution_fn = discretized_logistic.DiscretizedLogistic
 elif args.dataset == 'mnist' or args.dataset == 'fmnist':
     encoder_module = snt.Sequential(
@@ -147,12 +158,14 @@ elif args.dataset == 'mnist' or args.dataset == 'fmnist':
     ])
     output_distribution_fn = vae.BERNOULLI_FN
 
+
 def train_feed_dict_fn():
     feed_dict = dict()
     arrays = next(train_gen)
     feed_dict[data_ph] = arrays[0]
     feed_dict[label_ph] = arrays[1]
     return feed_dict
+
 
 def test_feed_dict_fn():
     feed_dict = dict()
@@ -161,11 +174,13 @@ def test_feed_dict_fn():
     feed_dict[label_ph] = arrays[1]
     return feed_dict
 
+
 def test_classification_rate(session):
     codes = []
     labels = []
     for _ in range(test_batches_per_epoch):
-        c, l = session.run([model.latent_posterior_sample, label_ph], feed_dict=test_feed_dict_fn())
+        c, l = session.run([model.latent_posterior_sample, label_ph],
+                           feed_dict=test_feed_dict_fn())
         codes.append(c)
         labels.append(l)
     codes = np.squeeze(np.concatenate(codes, axis=1))
@@ -173,12 +188,10 @@ def test_classification_rate(session):
     return decision_tree.score(codes, labels)
 
 
-
 decision_tree = sklearn.tree.DecisionTreeClassifier(
     max_depth=args.max_depth,
     min_weight_fraction_leaf=0.01,
     max_leaf_nodes=args.max_leaf_nodes)
-
 
 model = cpvae.CPVAE(
     args.latent_dimension,
@@ -207,7 +220,8 @@ sample = model.sample(args.batch_size, cluster_prob_ph)
 
 optimizer = tf.train.RMSPropOptimizer(learning_rate=args.learning_rate)
 train_op = optimizer.minimize(objective)
-base_epoch = tf.get_variable('base_epoch', initializer=tf.zeros((), dtype=tf.int32))
+base_epoch = tf.get_variable(
+    'base_epoch', initializer=tf.zeros((), dtype=tf.int32))
 
 verbose_ops_dict = dict()
 verbose_ops_dict['distortion'] = model.distortion
@@ -222,12 +236,14 @@ def classification_rate(session, feed_dict_fn, batches):
     codes = []
     labels = []
     for _ in range(batches):
-        c, l = session.run([model.latent_posterior_sample, label_ph], feed_dict=feed_dict_fn())
+        c, l = session.run([model.latent_posterior_sample, label_ph],
+                           feed_dict=feed_dict_fn())
         codes.append(c)
         labels.append(l)
     codes = np.squeeze(np.concatenate(codes, axis=1))
     labels = np.argmax(np.concatenate(labels), axis=1)
     return decision_tree.score(codes, labels)
+
 
 saver = tf.train.Saver()
 
@@ -238,12 +254,19 @@ with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     base_epoch_val = session.run(base_epoch)
     if args.load:
+<<<<<<< HEAD
         # with open(os.path.join(args.output_dir, 'decision_tree.pkl'), 'rb') as dt_file:
         #     model._decision_tree = pickle.load(dt_file)
+=======
+        with open(os.path.join(args.output_dir, 'decision_tree.pkl'),
+                  'rb') as dt_file:
+            model._decision_tree = pickle.load(dt_file)
+>>>>>>> d70b5106c25de8079f6d3cd9e2246b80ea0b808b
         saver.restore(session, os.path.join(args.output_dir, 'model_params'))
         base_epoch_val = session.run(base_epoch)
 
     if args.task == 'train':
+
         def run(phase, steps, feed_dict_fn, verbose=True):
             if phase not in ['TRAIN', 'TEST']:
                 print("phase must be TRAIN or TEST")
@@ -253,9 +276,11 @@ with tf.Session(config=config) as session:
             silent_ops = [train_op] if phase == 'TRAIN' else []
 
             if phase == 'TRAIN':
-                class_rate = classification_rate(session, train_feed_dict_fn, train_batches_per_epoch)
+                class_rate = classification_rate(session, train_feed_dict_fn,
+                                                 train_batches_per_epoch)
             elif phase == 'TEST':
-                class_rate = classification_rate(session, test_feed_dict_fn, test_batches_per_epoch)
+                class_rate = classification_rate(session, test_feed_dict_fn,
+                                                 test_batches_per_epoch)
 
             out_dict = util.run_epoch_ops(
                 session,
@@ -264,7 +289,7 @@ with tf.Session(config=config) as session:
                 silent_ops=silent_ops,
                 feed_dict_fn=feed_dict_fn,
                 verbose=verbose)
-            
+
             mean_distortion = np.mean(out_dict['distortion'])
             mean_rate = np.mean(out_dict['rate'])
             mean_elbo = np.mean(out_dict['elbo'])
@@ -276,9 +301,9 @@ with tf.Session(config=config) as session:
                 np.log(2.) * reduce(operator.mul, train_data_shape[-3:]))
             print("bits per dim: {:7.5f}\tdistortion: {:7.5f}\trate: {:7.5f}\t\
                 posterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}\tclass_rate: {:7.5f}\tclass_loss: {:7.5f}"
-                .format(bits_per_dim, mean_distortion, mean_rate,
-                        mean_posterior_logp, mean_elbo, mean_iw_elbo,
-                        class_rate, mean_classification_loss))
+                  .format(bits_per_dim, mean_distortion, mean_rate,
+                          mean_posterior_logp, mean_elbo, mean_iw_elbo,
+                          class_rate, mean_classification_loss))
             return class_rate
 
         for epoch in range(base_epoch_val + 1, args.epochs):
@@ -293,8 +318,10 @@ with tf.Session(config=config) as session:
                     epoch,
                     output_dir=args.output_dir)
 
-            train_class_rate = run('TRAIN', train_batches_per_epoch, train_feed_dict_fn)
-            test_class_rate = run('TEST', test_batches_per_epoch, test_feed_dict_fn)
+            train_class_rate = run('TRAIN', train_batches_per_epoch,
+                                   train_feed_dict_fn)
+            test_class_rate = run('TEST', test_batches_per_epoch,
+                                  test_feed_dict_fn)
 
             for c in range(10):
                 cluster_probs = np.zeros([args.batch_size, 10], dtype=float)
@@ -306,20 +333,27 @@ with tf.Session(config=config) as session:
                 plot.plot(filename, np.squeeze(generated_img), 4, 4)
 
             if test_class_rate > best_test_class_rate:
-                print('Saving model parameters at {} test classification rate'.format(test_class_rate))
+                print('Saving model parameters at {} test classification rate'.
+                      format(test_class_rate))
                 session.run([tf.assign(base_epoch, epoch)])
-                saver.save(session, os.path.join(args.output_dir, 'model_params'))
+                saver.save(session,
+                           os.path.join(args.output_dir, 'model_params'))
 
-                with open(os.path.join(args.output_dir, 'decision_tree.pkl'), 'wb') as dt_file:
+                with open(
+                        os.path.join(args.output_dir, 'decision_tree.pkl'),
+                        'wb') as dt_file:
                     pickle.dump(model._decision_tree, dt_file)
                 best_test_class_rate = test_class_rate
 
     elif args.task == 'eval':
-        c_means, c_sds = model.aggregate_posterior_parameters(session, label_ph, train_batches_per_epoch, train_feed_dict_fn)
+        # calculate mu for each node
+        print(
+            model.aggregate_posterior_parameters(session, label_ph,
+                                                 train_batches_per_epoch,
+                                                 train_feed_dict_fn))
+
         # write routine to perform walks (discriminative and generative)
-        
 
-
-
-
-
+        print(
+            eval_cpvae.evaluation_spacing(
+                np.zeros(10), np.ones(10), list(range(10))).shape)

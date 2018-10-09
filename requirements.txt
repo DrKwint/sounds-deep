@@ -79,7 +79,7 @@ simplegeneric==0.8.1
 six==1.11.0
 sklearn==0.0
 snowballstemmer==1.2.1
--e git+https://www.github.com/drkwint/sounds-deep.git@a9fa86bad77a7812700bc2bf8d21346939d034b7#egg=sounds_deep
+-e git+https://www.github.com/drkwint/sounds-deep.git@aa6d31e820122ded0ddf5c97a5a0b0f59dd358a2#egg=sounds_deep
 Sphinx==1.7.6
 sphinxcontrib-websupport==1.1.0
 tensorboard==1.9.0
@@ -97,3 +97,4 @@ webencodings==0.5.1
 Werkzeug==0.14.1
 widgetsnbextension==3.3.1
 wrapt==1.10.11
+yapf==0.24.0

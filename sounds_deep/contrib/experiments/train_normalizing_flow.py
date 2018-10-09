@@ -33,6 +33,7 @@ data_shape = (args.batch_size, ) + train_data.shape[1:]
 batches_per_epoch = train_data.shape[0] // args.batch_size
 train_gen = data.data_generator(train_data, args.batch_size)
 
+
 def fnfn(i):
     def _fn(x, output_units):
         first = snt.Linear(512)
@@ -49,7 +50,9 @@ def fnfn(i):
         shift, log_scale = net(x)
         # log_scale = tf.Print(log_scale, [tf.reduce_mean(x), tf.reduce_mean(first._w), tf.reduce_sum(log_scale, axis=-1)], message="{}: ".format(i))
         return shift, log_scale
+
     return tf.make_template("real_nvp_default_template", _fn)
+
 
 def flow_step():
     bijectors = []
@@ -58,6 +61,7 @@ def flow_step():
     bijectors.append(
         tfb.RealNVP(num_masked=784 // 2, shift_and_log_scale_fn=fnfn(i)))
     return tfb.Chain(bijectors)
+
 
 bijectors = []
 num_bijectors = 32

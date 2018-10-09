@@ -116,9 +116,10 @@ elif args.dataset == 'mnist':
     encoder_module = snt.nets.ConvNet2D([32, 64, 128], [5], [2], [snt.SAME])
     decoder_module = snt.Sequential([
         snt.Linear(64), lambda x: tf.reshape(x, [-1, 2, 2, 16]),
-        snt.nets.ConvNet2DTranspose([128, 64, 32, 32], [(4, 4), (8, 8),
-                                                        (16, 16), (32, 32)],
-                                    [5], [2], [snt.SAME]),
+        snt.nets.ConvNet2DTranspose([128, 64, 32, 32], [(4, 4),
+                                                        (8, 8), (16, 16),
+                                                        (32, 32)], [5], [2],
+                                    [snt.SAME]),
         lambda x: tf.reshape(x, [-1, 32 * 32 * 32]),
         snt.Linear(28 * 28), lambda x: tf.reshape(x, [-1, 28, 28, 1])
     ])
@@ -196,7 +197,7 @@ with tf.Session(config=config) as session:
             feed_dict[unlabeled_label_ph] = unlabeled_arrays[1]
             feed_dict[temperature_ph] = temperature
             return feed_dict
-        
+
         def test_feed_dict_fn():
             feed_dict = dict()
             labeled_arrays = next(test_gen)
@@ -219,13 +220,13 @@ with tf.Session(config=config) as session:
             verbose=True)
 
         mean_distortion = np.mean(out_dict['distortion'])
-        mean_rate = 0# np.mean(out_dict['rate'])
+        mean_rate = 0  # np.mean(out_dict['rate'])
         mean_nv_entropy = np.mean(out_dict['nv_entropy'])
         mean_nv_log_prob = np.mean(out_dict['nv_log_prob'])
         mean_elbo = np.mean(out_dict['elbo'])
         mean_prior_logp = np.mean(out_dict['prior_logp'])
-        mean_posterior_logp = 0# np.mean(out_dict['posterior_logp'])
-        mean_nv_prior_logp = 0# np.mean(out_dict['nv_prior_logp'])
+        mean_posterior_logp = 0  # np.mean(out_dict['posterior_logp'])
+        mean_nv_prior_logp = 0  # np.mean(out_dict['nv_prior_logp'])
         mean_nv_posterior_logp = np.mean(out_dict['nv_posterior_logp'])
         mean_classification_rate = np.mean(out_dict['classification_rate'])
 
@@ -247,13 +248,13 @@ with tf.Session(config=config) as session:
             verbose=True)
 
         mean_distortion = np.mean(out_dict['distortion'])
-        mean_rate = 0# np.mean(out_dict['rate'])
+        mean_rate = 0  # np.mean(out_dict['rate'])
         mean_nv_entropy = np.mean(out_dict['nv_entropy'])
         mean_nv_log_prob = np.mean(out_dict['nv_log_prob'])
         mean_elbo = np.mean(out_dict['elbo'])
         mean_prior_logp = np.mean(out_dict['prior_logp'])
-        mean_posterior_logp = 0# np.mean(out_dict['posterior_logp'])
-        mean_nv_prior_logp = 0# np.mean(out_dict['nv_prior_logp'])
+        mean_posterior_logp = 0  # np.mean(out_dict['posterior_logp'])
+        mean_nv_prior_logp = 0  # np.mean(out_dict['nv_prior_logp'])
         mean_nv_posterior_logp = np.mean(out_dict['nv_posterior_logp'])
         mean_classification_rate = np.mean(out_dict['classification_rate'])
 
