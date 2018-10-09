@@ -7,6 +7,7 @@ import argparse
 import operator
 from functools import reduce
 import json
+import pickle
 
 import numpy as np
 import sonnet as snt
@@ -194,11 +195,11 @@ verbose_ops_dict['iw_elbo'] = model.importance_weighted_elbo
 verbose_ops_dict['posterior_logp'] = model.posterior_logp
 verbose_ops_dict['classification_loss'] = model.classification_loss
 
-def test_classification_rate(session):
+def classification_rate(session, feed_dict_fn, batches):
     codes = []
     labels = []
-    for _ in range(test_batches_per_epoch):
-        c, l = session.run([model.latent_posterior_sample, label_ph], feed_dict=test_feed_dict_fn())
+    for _ in range(batches):
+        c, l = session.run([model.latent_posterior_sample, label_ph], feed_dict=feed_dict_fn())
         codes.append(c)
         labels.append(l)
     codes = np.squeeze(np.concatenate(codes, axis=1))
@@ -214,75 +215,83 @@ with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     base_epoch_val = session.run(base_epoch)
     if args.load:
+        with open(os.path.join(args.output_dir, 'decision_tree.pkl'), 'rb') as dt_file:
+            model._decision_tree = pickle.load(dt_file)
         saver.restore(session, os.path.join(args.output_dir, 'model_params'))
         base_epoch_val = session.run(base_epoch)
-        train_class_rate = 1. - model.update(
-            session,
-            label_ph,
-            args.update_samples * train_batches_per_epoch,
-            train_feed_dict_fn,
-            base_epoch_val,
-            output_dir=args.output_dir)
 
-    def run(phase, steps, feed_dict_fn, verbose=True):
-        if phase not in ['TRAIN', 'TEST']:
-            print("phase must be TRAIN or TEST")
-            exit()
-        print(phase)
+    if args.task == 'train':
+        def run(phase, steps, feed_dict_fn, verbose=True):
+            if phase not in ['TRAIN', 'TEST']:
+                print("phase must be TRAIN or TEST")
+                exit()
+            print(phase)
 
-        silent_ops = [train_op] if phase == 'TRAIN' else []
-        class_rate = test_classification_rate(session) if phase == 'TEST' else train_class_rate
+            silent_ops = [train_op] if phase == 'TRAIN' else []
+            if phase == 'TRAIN':
+                class_rate = classification_rate(session, train_feed_dict_fn, train_batches_per_epoch)
+            elif phase == 'TEST':
+                class_rate = classification_rate(session, test_feed_dict_fn, test_batches_per_epoch)
 
-        out_dict = util.run_epoch_ops(
-            session,
-            steps,
-            verbose_ops_dict=verbose_ops_dict,
-            silent_ops=silent_ops,
-            feed_dict_fn=feed_dict_fn,
-            verbose=verbose)
-        
-        mean_distortion = np.mean(out_dict['distortion'])
-        mean_rate = np.mean(out_dict['rate'])
-        mean_elbo = np.mean(out_dict['elbo'])
-        mean_iw_elbo = np.mean(out_dict['iw_elbo'])
-        mean_posterior_logp = np.mean(out_dict['posterior_logp'])
-        mean_classification_loss = np.mean(out_dict['classification_loss'])
-
-        bits_per_dim = -mean_elbo / (
-            np.log(2.) * reduce(operator.mul, train_data_shape[-3:]))
-        print("bits per dim: {:7.5f}\tdistortion: {:7.5f}\trate: {:7.5f}\t\
-            posterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}\tclass_rate: {:7.5f}\tclass_loss: {:7.5f}"
-            .format(bits_per_dim, mean_distortion, mean_rate,
-                    mean_posterior_logp, mean_elbo, mean_iw_elbo,
-                    class_rate, mean_classification_loss))
-        return class_rate
-
-    for epoch in range(base_epoch_val + 1, args.epochs):
-        print("EPOCH {}".format(epoch))
-
-        if epoch % args.update_period == 1:
-            train_class_rate = 1. - model.update(
+            out_dict = util.run_epoch_ops(
                 session,
-                label_ph,
-                args.update_samples * train_batches_per_epoch,
-                train_feed_dict_fn,
-                epoch,
-                output_dir=args.output_dir)
+                steps,
+                verbose_ops_dict=verbose_ops_dict,
+                silent_ops=silent_ops,
+                feed_dict_fn=feed_dict_fn,
+                verbose=verbose)
+            
+            mean_distortion = np.mean(out_dict['distortion'])
+            mean_rate = np.mean(out_dict['rate'])
+            mean_elbo = np.mean(out_dict['elbo'])
+            mean_iw_elbo = np.mean(out_dict['iw_elbo'])
+            mean_posterior_logp = np.mean(out_dict['posterior_logp'])
+            mean_classification_loss = np.mean(out_dict['classification_loss'])
 
-        train_class_rate = run('TRAIN', train_batches_per_epoch, train_feed_dict_fn)
-        test_class_rate = run('TEST', test_batches_per_epoch, test_feed_dict_fn)
+            bits_per_dim = -mean_elbo / (
+                np.log(2.) * reduce(operator.mul, train_data_shape[-3:]))
+            print("bits per dim: {:7.5f}\tdistortion: {:7.5f}\trate: {:7.5f}\t\
+                posterior_logp: {:7.5f}\telbo: {:7.5f}\tiw_elbo: {:7.5f}\tclass_rate: {:7.5f}\tclass_loss: {:7.5f}"
+                .format(bits_per_dim, mean_distortion, mean_rate,
+                        mean_posterior_logp, mean_elbo, mean_iw_elbo,
+                        class_rate, mean_classification_loss))
+            return class_rate
 
-        for c in range(10):
-            cluster_probs = np.zeros([args.batch_size, 10], dtype=float)
-            cluster_probs[:, c] = 1.
-            generated_img = session.run(sample,
-                                        {cluster_prob_ph: cluster_probs})
-            filename = os.path.join(output_directory,
-                                    'epoch{}_class{}.png'.format(epoch, c))
-            plot.plot(filename, np.squeeze(generated_img), 4, 4)
+        for epoch in range(base_epoch_val + 1, args.epochs):
+            print("EPOCH {}".format(epoch))
 
-        if test_class_rate > best_test_class_rate:
-            print('Saving model parameters at {} test classification rate'.format(test_class_rate))
-            session.run([tf.assign(base_epoch, epoch)])
-            saver.save(session, os.path.join(args.output_dir, 'model_params'))
-            best_test_class_rate = test_class_rate
+            if epoch % args.update_period == 1:
+                train_class_rate = 1. - model.update(
+                    session,
+                    label_ph,
+                    args.update_samples * train_batches_per_epoch,
+                    train_feed_dict_fn,
+                    epoch,
+                    output_dir=args.output_dir)
+
+            train_class_rate = run('TRAIN', train_batches_per_epoch, train_feed_dict_fn)
+            test_class_rate = run('TEST', test_batches_per_epoch, test_feed_dict_fn)
+
+            for c in range(10):
+                cluster_probs = np.zeros([args.batch_size, 10], dtype=float)
+                cluster_probs[:, c] = 1.
+                generated_img = session.run(sample,
+                                            {cluster_prob_ph: cluster_probs})
+                filename = os.path.join(output_directory,
+                                        'epoch{}_class{}.png'.format(epoch, c))
+                plot.plot(filename, np.squeeze(generated_img), 4, 4)
+
+            if test_class_rate > best_test_class_rate:
+                print('Saving model parameters at {} test classification rate'.format(test_class_rate))
+                session.run([tf.assign(base_epoch, epoch)])
+                saver.save(session, os.path.join(args.output_dir, 'model_params'))
+                with open(os.path.join(args.output_dir, 'decision_tree.pkl'), 'wb') as dt_file:
+                    pickle.dump(model._decision_tree, dt_file)
+                best_test_class_rate = test_class_rate
+
+    elif args.task == 'eval':
+        # calculate mu for each node
+        print(model.aggregate_posterior_parameters(session, label_ph, train_batches_per_epoch, train_feed_dict_fn))
+
+        # write routine to perform walks (discriminative and generative)
+        

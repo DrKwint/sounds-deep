@@ -176,7 +176,7 @@ class CPVAE(snt.AbstractModule):
         return mu, sigma, codes, labels
 
     def aggregate_posterior_parameters(self, session, label_tensor, batch_num, feed_dict_fn):
-        mu, sigma, _, _ = self.posterior_parameters(session, label_tensor, batch_num, feed_dict_fn)
+        mu, sigma, _, labels = self.posterior_parameters(session, label_tensor, batch_num, feed_dict_fn)
         if len(labels.shape) > 1: labels = np.argmax(labels, axis=1)
         class_locs = np.empty([self._class_num, self._latent_dimension])
         class_scales = np.empty([self._class_num, self._latent_dimension])
