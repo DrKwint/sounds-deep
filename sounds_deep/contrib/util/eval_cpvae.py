@@ -31,7 +31,7 @@ def starting_point(start_classes, c_means, c_stddev):
     #Gives the starting "average digit" of the classees given in start_classes
 
 
-def evaluation_spacing(mu, sigma, active_dims, target_mu=None, num_steps=5):
+def evaluation_spacing(mu, sigma, active_dims, target_mu=None, num_steps=3):
     """
     If target_mu is None, standard deviations are used, otherwise steps are
     uniform between mu and target
@@ -55,3 +55,20 @@ def evaluation_spacing(mu, sigma, active_dims, target_mu=None, num_steps=5):
     step_vals = mu + displacement
 
     return step_vals
+
+
+def two_leaf_visualization(c_means, c_sds, classes, active_dims, num_steps=3):
+  #Start from the average of two classes, varry active_dim(s).
+  initial_mu, initial_sigma = starting_point(classes, c_means, c_sds)
+  return evaluation_spacing(initial_mu, initial_sigma, active_dims, num_steps)
+
+
+def mean_digit_dim_visualization(c_means, c_sds, active_dims, num_steps=3):
+  #Start from "mean digit", show impact of varrying a single dimension in latent space.
+  classes = np.arrange(len(c_means))
+  all_class_mu, all_class_sigma = starting_point(classes, c_means, c_sds)
+  return evaluation_spacing(all_class_mu, all_class_sigma, active_dims, num_steps)
+
+def instance_to_class_visualization(instance, c_means, c_sds, num_steps=3):
+  #Celebrity baby from instnace to actual class.
+

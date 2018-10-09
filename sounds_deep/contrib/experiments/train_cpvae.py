@@ -254,9 +254,14 @@ with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     base_epoch_val = session.run(base_epoch)
     if args.load:
+<<<<<<< HEAD
+        # with open(os.path.join(args.output_dir, 'decision_tree.pkl'), 'rb') as dt_file:
+        #     model._decision_tree = pickle.load(dt_file)
+=======
         with open(os.path.join(args.output_dir, 'decision_tree.pkl'),
                   'rb') as dt_file:
             model._decision_tree = pickle.load(dt_file)
+>>>>>>> d70b5106c25de8079f6d3cd9e2246b80ea0b808b
         saver.restore(session, os.path.join(args.output_dir, 'model_params'))
         base_epoch_val = session.run(base_epoch)
 
