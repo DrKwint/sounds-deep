@@ -80,8 +80,8 @@ def train(session,
             silent_ops=train_ops_list,
             feed_dict_fn=train_dict['feed_dict_fn'],
             verbose=verbose)
-        
-        train_run_dict = {k: np.mean(v) for k,v in train_run_dict.items()}
+
+        train_run_dict = {k: np.mean(v) for k, v in train_run_dict.items()}
         train_val_dict = dict(**train_setup_dict, **train_run_dict)
         print(train_val_dict)
 
@@ -94,10 +94,13 @@ def train(session,
             feed_dict_fn=validate_dict['feed_dict_fn'],
             verbose=verbose)
 
-        validate_run_dict = {k: np.mean(v) for k,v in validate_run_dict.items()}
+        validate_run_dict = {
+            k: np.mean(v)
+            for k, v in validate_run_dict.items()
+        }
         validate_val_dict = dict(**validate_setup_dict, **validate_run_dict)
         print(validate_val_dict)
-        
+
         # END OF EPOCH
         if exit_fn(session, epoch, validate_val_dict):
             return

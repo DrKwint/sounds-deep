@@ -254,18 +254,14 @@ with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     base_epoch_val = session.run(base_epoch)
     if args.load:
-<<<<<<< HEAD
-        # with open(os.path.join(args.output_dir, 'decision_tree.pkl'), 'rb') as dt_file:
-        #     model._decision_tree = pickle.load(dt_file)
-=======
         with open(os.path.join(args.output_dir, 'decision_tree.pkl'),
                   'rb') as dt_file:
             model._decision_tree = pickle.load(dt_file)
->>>>>>> d70b5106c25de8079f6d3cd9e2246b80ea0b808b
         saver.restore(session, os.path.join(args.output_dir, 'model_params'))
         base_epoch_val = session.run(base_epoch)
 
     if args.task == 'train':
+
         def train_setup_fn(session, epoch):
             if epoch % args.update_period == 1:
                 model.update(
@@ -276,15 +272,25 @@ with tf.Session(config=config) as session:
                     epoch,
                     output_dir=args.output_dir)
 
-            class_rate = classification_rate(session, train_feed_dict_fn, train_batches_per_epoch)
+            class_rate = classification_rate(session, train_feed_dict_fn,
+                                             train_batches_per_epoch)
             return {'class_rate': class_rate}
 
         def validate_setup_fn(session, epoch):
-            class_rate = classification_rate(session, train_feed_dict_fn, train_batches_per_epoch)
+            class_rate = classification_rate(session, train_feed_dict_fn,
+                                             train_batches_per_epoch)
             return {'class_rate': class_rate}
-        
-        train_dict = {'setup_fn': train_setup_fn, 'steps_per_epoch': train_batches_per_epoch, 'feed_dict_fn': train_feed_dict_fn}
-        validate_dict = {'setup_fn': validate_setup_fn, 'steps_per_epoch': test_batches_per_epoch, 'feed_dict_fn': test_feed_dict_fn}
+
+        train_dict = {
+            'setup_fn': train_setup_fn,
+            'steps_per_epoch': train_batches_per_epoch,
+            'feed_dict_fn': train_feed_dict_fn
+        }
+        validate_dict = {
+            'setup_fn': validate_setup_fn,
+            'steps_per_epoch': test_batches_per_epoch,
+            'feed_dict_fn': test_feed_dict_fn
+        }
 
         def exit_fn(session, epoch, validate_dict):
             # save decoder samples of each class
@@ -296,7 +302,7 @@ with tf.Session(config=config) as session:
                 filename = os.path.join(output_directory,
                                         'epoch{}_class{}.png'.format(epoch, c))
                 plot.plot(filename, np.squeeze(generated_img), 4, 4)
-            
+
             # decide whether to save model
             if not hasattr(exit_fn, 'best_class_rate'):
                 exit_fn.best_class_rate = 0.0
@@ -317,7 +323,7 @@ with tf.Session(config=config) as session:
             return False
 
         util.train(session, args.epochs, train_dict, validate_dict, [train_op],
-              verbose_ops_dict, exit_fn)
+                   verbose_ops_dict, exit_fn)
 
     elif args.task == 'eval':
         # calculate mu for each node
