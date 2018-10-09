@@ -269,7 +269,7 @@ class CPVAE(snt.AbstractModule):
         predicted_labels = self._decision_tree.predict(codes)
         return np.mean(predicted_labels != labels)
 
-    def sample(self, batch_size, cluster_ids, latent_code=None):
+    def sample(self, batch_size, cluster_ids=None, latent_code=None):
         """Generate samples of the specified shape.
 
         `self._build` must be called before this function. 
