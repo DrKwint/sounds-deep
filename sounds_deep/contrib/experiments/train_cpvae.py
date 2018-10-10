@@ -247,9 +247,14 @@ with tf.Session(config=config) as session:
     session.run(tf.global_variables_initializer())
     base_epoch_val = session.run(base_epoch)
     if args.load:
-        # with open(os.path.join(args.output_dir, 'decision_tree.pkl'),
-        #           'rb') as dt_file:
-        #     model._decision_tree = pickle.load(dt_file)
+        decision_tree_path = os.path.join(args.output_dir, 'decision_tree.pkl')
+        if os.path.exists(decision_tree_path):
+            decision_tree_path = os.path.join(args.output_dir,
+                                              'decision_tree.pkl')
+            with open(
+                    os.path.join(args.output_dir, 'decision_tree.pkl'),
+                    'rb') as dt_file:
+                model._decision_tree = pickle.load(dt_file)
         saver.restore(session, os.path.join(args.output_dir, 'model_params'))
         base_epoch_val = session.run(base_epoch)
 
@@ -309,9 +314,8 @@ with tf.Session(config=config) as session:
 
                 decision_tree_path = os.path.join(args.output_dir,
                                                   'decision_tree.pkl')
-                if os.path.exists(decision_tree_path):
-                    with open(decision_tree_path, 'wb') as dt_file:
-                        pickle.dump(model._decision_tree, dt_file)
+                with open(decision_tree_path, 'wb') as dt_file:
+                    pickle.dump(model._decision_tree, dt_file)
                 exit_fn.best_class_rate = class_rate
             # not currently doing early stopping
             return False
@@ -320,6 +324,21 @@ with tf.Session(config=config) as session:
                    verbose_ops_dict, exit_fn)
 
     elif args.task == 'eval':
+        # confusion matrix
+        eval_dict = util.run_epoch_ops(
+            session,
+            test_batches_per_epoch,
+            verbose_ops_dict={
+                'labels': label_ph,
+                'codes': model.latent_posterior_sample
+            },
+            feed_dict_fn=test_feed_dict_fn)
+        label_vals = np.stack(eval_dict['labels'])
+        code_vals = np.concatenate(eval_dict['codes'], axis=0)
+        prediction_vals = model._decision_tree.predict(code_vals)
+        cnf_matrix = sklearn.metrics.confusion_matrix(np.argmax(label_vals, axis=1), prediction_vals)
+        plot.plot_confusion_matrix(cnf_matrix, classes=[str(c) for c in range(10)], filename='test_confusion_matrix')
+
         # calculate mu for each node
         c_means, c_sds = model.aggregate_posterior_parameters(
             session, label_ph, train_batches_per_epoch, train_feed_dict_fn)
@@ -337,9 +356,10 @@ with tf.Session(config=config) as session:
                 c_means, c_sds, classes, dims, args.viz_steps)
 
         latent_code_ph = tf.placeholder(tf.float32)
-        img_tensor = model.sample(len(latent_codes), None, latent_code=latent_code_ph)
+        img_tensor = model.sample(
+            len(latent_codes), None, latent_code=latent_code_ph)
         latent_codes = [a.astype(np.float32) for a in latent_codes]
-        
+
         for latent_code, filename in zip(latent_codes, filenames):
             img_val = session.run(img_tensor, {latent_code_ph: latent_code})
             plot.plot_single(filename, img_val)
