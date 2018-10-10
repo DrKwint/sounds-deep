@@ -336,8 +336,12 @@ with tf.Session(config=config) as session:
         label_vals = np.stack(eval_dict['labels'])
         code_vals = np.concatenate(eval_dict['codes'], axis=0)
         prediction_vals = model._decision_tree.predict(code_vals)
-        cnf_matrix = sklearn.metrics.confusion_matrix(np.argmax(label_vals, axis=1), prediction_vals)
-        plot.plot_confusion_matrix(cnf_matrix, classes=[str(c) for c in range(10)], filename='test_confusion_matrix')
+        cnf_matrix = sklearn.metrics.confusion_matrix(
+            np.argmax(label_vals, axis=1), prediction_vals)
+        plot.plot_confusion_matrix(
+            cnf_matrix,
+            classes=[str(c) for c in range(10)],
+            filename='test_confusion_matrix')
 
         # calculate mu for each node
         c_means, c_sds = model.aggregate_posterior_parameters(
