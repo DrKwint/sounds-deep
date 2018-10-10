@@ -338,9 +338,9 @@ with tf.Session(config=config) as session:
             label_vals = np.stack(eval_dict['labels'])
             code_vals = np.concatenate(eval_dict['codes'], axis=0)
             prediction_vals = model._decision_tree.predict(code_vals)
-            
+
             cnf_matrix = sklearn.metrics.confusion_matrix(
-            np.argmax(label_vals, axis=1), prediction_vals)
+                np.argmax(label_vals, axis=1), prediction_vals)
             plot.plot_confusion_matrix(
                 cnf_matrix,
                 classes=[str(c) for c in range(10)],
@@ -368,13 +368,15 @@ with tf.Session(config=config) as session:
             latent_codes = [a.astype(np.float32) for a in latent_codes]
 
             for latent_code, filename in zip(latent_codes, filenames):
-                img_val = session.run(img_tensor, {latent_code_ph: latent_code})
+                img_val = session.run(img_tensor,
+                                      {latent_code_ph: latent_code})
                 plot.plot_single(filename, img_val)
         elif args.viz_task == 'class_instance':
             pass
         elif args.viz_task == 'single_dim':
             dims = np.asarray(args.viz_dimension)
-            latent_codes, filenames = eval_cpvae.mean_digit_dim_visualization(c_means, c_sds, dims, args.viz_steps)
+            latent_codes, filenames = eval_cpvae.mean_digit_dim_visualization(
+                c_means, c_sds, dims, args.viz_steps)
 
             latent_code_ph = tf.placeholder(tf.float32)
             img_tensor = model.sample(
@@ -382,6 +384,7 @@ with tf.Session(config=config) as session:
             latent_codes = [a.astype(np.float32) for a in latent_codes]
 
             for latent_code, filename in zip(latent_codes, filenames):
-                img_val = session.run(img_tensor, {latent_code_ph: latent_code})
+                img_val = session.run(img_tensor,
+                                      {latent_code_ph: latent_code})
                 plot.plot_single(filename, img_val)
         #python sounds_deep/contrib/experiments/train_cpvae.py --task eval --output_dir cpvae_16177836/ --load --update_samples 1 --viz_task 2leaf --viz_classes 4 9 --viz_dimension 26
