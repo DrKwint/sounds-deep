@@ -107,9 +107,10 @@ def mean_digit_dim_visualization(c_means, c_sds, active_dims=None,
         for i in range(2 * num_steps + 1)
     ]
     all_class_mu, all_class_sigma = starting_point(classes, c_means, c_sds)
-    latent_code = evaluation_spacing(all_class_mu, all_class_sigma, active_dims,
-                              num_steps)
+    latent_code = evaluation_spacing(all_class_mu, all_class_sigma,
+                                     active_dims, num_steps)
     return latent_code, filenames
+
 
 def instance_to_class_visualization(instance_mu,
                                     instance_sigma,
