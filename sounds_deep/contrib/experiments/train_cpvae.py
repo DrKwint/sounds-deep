@@ -48,8 +48,9 @@ parser.add_argument('--load', action='store_true')
 
 # 2leaf walks from one leaf to another
 # class instance generates a walk from encoded point to class
+parser.add_argument('--conf_matr', action='store_true')
 parser.add_argument(
-    '--viz_task', type=str, choices=['2leaf', 'class_instance'])
+    '--viz_task', type=str, choices=['2leaf', 'class_instance', 'single_dim'])
 parser.add_argument('--viz_steps', type=int, default=3)
 parser.add_argument('--viz_classes', nargs='*', type=int)
 parser.add_argument('--viz_dimension', type=int, default=None)
@@ -325,23 +326,25 @@ with tf.Session(config=config) as session:
 
     elif args.task == 'eval':
         # confusion matrix
-        eval_dict = util.run_epoch_ops(
-            session,
-            test_batches_per_epoch,
-            verbose_ops_dict={
-                'labels': label_ph,
-                'codes': model.latent_posterior_sample
-            },
-            feed_dict_fn=test_feed_dict_fn)
-        label_vals = np.stack(eval_dict['labels'])
-        code_vals = np.concatenate(eval_dict['codes'], axis=0)
-        prediction_vals = model._decision_tree.predict(code_vals)
-        cnf_matrix = sklearn.metrics.confusion_matrix(
+        if args.conf_matr:
+            eval_dict = util.run_epoch_ops(
+                session,
+                test_batches_per_epoch,
+                verbose_ops_dict={
+                    'labels': label_ph,
+                    'codes': model.latent_posterior_sample
+                },
+                feed_dict_fn=test_feed_dict_fn)
+            label_vals = np.stack(eval_dict['labels'])
+            code_vals = np.concatenate(eval_dict['codes'], axis=0)
+            prediction_vals = model._decision_tree.predict(code_vals)
+            
+            cnf_matrix = sklearn.metrics.confusion_matrix(
             np.argmax(label_vals, axis=1), prediction_vals)
-        plot.plot_confusion_matrix(
-            cnf_matrix,
-            classes=[str(c) for c in range(10)],
-            filename='test_confusion_matrix')
+            plot.plot_confusion_matrix(
+                cnf_matrix,
+                classes=[str(c) for c in range(10)],
+                filename='test_confusion_matrix')
 
         # calculate mu for each node
         c_means, c_sds = model.aggregate_posterior_parameters(
@@ -359,13 +362,26 @@ with tf.Session(config=config) as session:
             latent_codes, filenames = eval_cpvae.two_leaf_visualization(
                 c_means, c_sds, classes, dims, args.viz_steps)
 
-        latent_code_ph = tf.placeholder(tf.float32)
-        img_tensor = model.sample(
-            len(latent_codes), None, latent_code=latent_code_ph)
-        latent_codes = [a.astype(np.float32) for a in latent_codes]
+            latent_code_ph = tf.placeholder(tf.float32)
+            img_tensor = model.sample(
+                len(latent_codes), None, latent_code=latent_code_ph)
+            latent_codes = [a.astype(np.float32) for a in latent_codes]
 
-        for latent_code, filename in zip(latent_codes, filenames):
-            img_val = session.run(img_tensor, {latent_code_ph: latent_code})
-            plot.plot_single(filename, img_val)
+            for latent_code, filename in zip(latent_codes, filenames):
+                img_val = session.run(img_tensor, {latent_code_ph: latent_code})
+                plot.plot_single(filename, img_val)
+        elif args.viz_task == 'class_instance':
+            pass
+        elif args.viz_task == 'single_dim':
+            dims = np.asarray(args.viz_dimension)
+            latent_codes, filenames = eval_cpvae.mean_digit_dim_visualization(c_means, c_sds, dims, args.viz_steps)
 
+            latent_code_ph = tf.placeholder(tf.float32)
+            img_tensor = model.sample(
+                len(latent_codes), None, latent_code=latent_code_ph)
+            latent_codes = [a.astype(np.float32) for a in latent_codes]
+
+            for latent_code, filename in zip(latent_codes, filenames):
+                img_val = session.run(img_tensor, {latent_code_ph: latent_code})
+                plot.plot_single(filename, img_val)
         #python sounds_deep/contrib/experiments/train_cpvae.py --task eval --output_dir cpvae_16177836/ --load --update_samples 1 --viz_task 2leaf --viz_classes 4 9 --viz_dimension 26

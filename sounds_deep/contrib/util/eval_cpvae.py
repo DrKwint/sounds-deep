@@ -95,10 +95,14 @@ def mean_digit_dim_visualization(c_means, c_sds, active_dims=None,
                                  num_steps=3):
     #Start from "mean digit", show impact of varrying a single dimension in latent space.
     classes = np.arange(len(c_means))
+    filenames = [
+        'all_class_dim{}_{}'.format(active_dims, i)
+        for i in range(2 * num_steps + 1)
+    ]
     all_class_mu, all_class_sigma = starting_point(classes, c_means, c_sds)
-    return evaluation_spacing(all_class_mu, all_class_sigma, active_dims,
+    latent_code = evaluation_spacing(all_class_mu, all_class_sigma, active_dims,
                               num_steps)
-
+    return latent_code, filenames
 
 def instance_to_class_visualization(instance_mu,
                                     instance_sigma,
