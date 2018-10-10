@@ -336,7 +336,12 @@ with tf.Session(config=config) as session:
             latent_codes, filenames = eval_cpvae.two_leaf_visualization(
                 c_means, c_sds, classes, dims, args.viz_steps)
 
-        for latent_code in latent_codes:
-            plot_code = lambda latent_code, filename: plot.plot(filename, model.sample(1, None, latent_code=latent_code), 1, 1)
+        latent_code_ph = tf.placeholder(tf.float32)
+        img_tensor = model.sample(len(latent_codes), None, latent_code=latent_code_ph)
+        latent_codes = [a.astype(np.float32) for a in latent_codes]
+        
+        for latent_code, filename in zip(latent_codes, filenames):
+            img_val = session.run(img_tensor, {latent_code_ph: latent_code})
+            plot.plot_single(filename, img_val)
 
         #python sounds_deep/contrib/experiments/train_cpvae.py --task eval --output_dir cpvae_16177836/ --load --update_samples 1 --viz_task 2leaf --viz_classes 4 9 --viz_dimension 26

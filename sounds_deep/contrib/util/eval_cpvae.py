@@ -84,8 +84,8 @@ def two_leaf_visualization(c_means,
                                      None, num_steps)
 
     filenames = [
-        '{}_{}_dim{}'.format(classes[0], classes[1], active_dims)
-        for _ in range(2 * num_steps + 1)
+        '{}_{}_dim{}_{}'.format(classes[0], classes[1], active_dims, i)
+        for i in range(2 * num_steps + 1)
     ]
     print(filenames)
     return latent_code, filenames
