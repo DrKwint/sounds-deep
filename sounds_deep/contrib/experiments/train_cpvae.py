@@ -58,8 +58,8 @@ parser.add_argument('--viz_dir', type=str, default='./')
 args = parser.parse_args()
 
 # enforce arg invariants
-if args.viz_task == '2leaf':
-    assert len(args.viz_classes) == 2
+# if args.viz_task == '2leaf':
+#     assert len(args.viz_classes) == 2
 
 # sampled img save directory
 if args.output_dir == './' and 'SLURM_JOB_ID' in os.environ.keys():
