@@ -117,8 +117,9 @@ def instance_to_class_visualization(instance_mu,
                                     c_means,
                                     c_sds,
                                     target_c,
+                                    active_dim=None,
                                     num_steps=3):
     #Celebrity baby from instance to actual class.
     target_mu = c_means[target_c]
-    return evaluation_spacing(instance_mu, instance_sigma, None, target_mu,
-                              num_steps)
+    return evaluation_spacing(instance_mu, instance_sigma, active_dim,
+                              target_mu, num_steps)

@@ -386,32 +386,44 @@ with tf.Session(config=config) as session:
                 },
                 feed_dict_fn=test_feed_dict_fn)
             data_vals = np.stack(eval_dict['data'])
-            label_vals = np.stack(eval_dict['labels'])
+            label_vals = np.argmax(np.stack(eval_dict['labels']), axis=1)
             mu_vals = np.stack(eval_dict['mu'])
             sigma_vals = np.stack(eval_dict['sigma'])
             code_vals = np.concatenate(eval_dict['codes'], axis=0)
             prediction_vals = model._decision_tree.predict(code_vals)
 
-            mislabeled_mask = np.not_equal(
-                np.argmax(label_vals, axis=1), prediction_vals)
+            mislabeled_mask = np.not_equal(label_vals, prediction_vals)
             mislabeled_idxs = np.arange(len(data_vals))[mislabeled_mask]
             mislabeled_data = data_vals[mislabeled_mask]
+            mislabeled_label = label_vals[mislabeled_mask]
+            mislabeled_mu = mu_vals[mislabeled_mask]
+            mislabeled_sigma = sigma_vals[mislabeled_mask]
+            mislabeled_code = code_vals[mislabeled_mask]
+            mislabeled_prediction = prediction_vals[mislabeled_mask]
 
             c_means, c_sds = model.aggregate_posterior_parameters(
                 session, label_ph, train_batches_per_epoch, train_feed_dict_fn)
 
-            for id, instance_mu, instance_sigma, label in zip(
-                    mislabeled_idxs, mu_vals, sigma_vals,
-                    np.argmax(label_vals, axis=1)):
-                plot.plot_single('{}'.format(id), data_vals[id])
-                img_val = eval_cpvae.instance_to_class_visualization(
+            latent_code_ph = tf.placeholder(tf.float32)
+            for id, instance_mu, instance_sigma, label, prediction in zip(
+                    mislabeled_idxs, mislabeled_mu, mislabeled_sigma,
+                    mislabeled_label, mislabeled_prediction):
+                latent_codes = eval_cpvae.instance_to_class_visualization(
                     instance_mu,
                     instance_sigma,
                     c_means,
                     c_sds,
                     label,
                     num_steps=3)
-                plot.plot_single('c{}_{}'.format(label, id), img_val)
+                img_tensor = model.sample(
+                    len(latent_codes), None, latent_code=latent_code_ph)
+
+                for i, latent_code in enumerate(latent_codes):
+                    img_val = session.run(img_tensor,
+                                          {latent_code_ph: latent_code})
+                    plot.plot_single(
+                        'c{}_m{}_id{}_{}'.format(label, prediction, id, i),
+                        img_val)
 
         elif args.viz_task == 'single_dim':
             dims = np.asarray(args.viz_dimension)
