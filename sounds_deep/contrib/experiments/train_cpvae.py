@@ -403,7 +403,7 @@ with tf.Session(config=config) as session:
             for id, instance_mu, instance_sigma, label in zip(
                     mislabeled_idxs, mu_vals, sigma_vals,
                     np.argmax(label_vals, axis=1)):
-
+                plot.plot_single('{}'.format(id), data_vals[id])
                 img_val = eval_cpvae.instance_to_class_visualization(
                     instance_mu,
                     instance_sigma,
