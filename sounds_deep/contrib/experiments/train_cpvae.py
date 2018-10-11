@@ -50,7 +50,9 @@ parser.add_argument('--load', action='store_true')
 # class instance generates a walk from encoded point to class
 parser.add_argument('--conf_matr', action='store_true')
 parser.add_argument(
-    '--viz_task', type=str, choices=['2leaf', 'class_instance', 'single_dim'])
+    '--viz_task',
+    type=str,
+    choices=['2leaf', '2leaf_generative', 'class_instance', 'single_dim'])
 parser.add_argument('--viz_steps', type=int, default=3)
 parser.add_argument('--viz_classes', nargs='*', type=int)
 parser.add_argument('--viz_dimension', type=int, default=None)
@@ -363,6 +365,20 @@ with tf.Session(config=config) as session:
                 args.viz_dimension)
             latent_codes, filenames = eval_cpvae.two_leaf_visualization(
                 c_means, c_sds, classes, dims, args.viz_steps)
+
+            latent_code_ph = tf.placeholder(tf.float32)
+            img_tensor = model.sample(
+                len(latent_codes), None, latent_code=latent_code_ph)
+            latent_codes = [a.astype(np.float32) for a in latent_codes]
+
+            for latent_code, filename in zip(latent_codes, filenames):
+                img_val = session.run(img_tensor,
+                                      {latent_code_ph: latent_code})
+                plot.plot_single(filename, img_val)
+        elif args.viz_task == '2leaf_generative':
+            classes = np.asarray(args.viz_classes)
+            latent_codes, filenames = eval_cpvae.two_leaf_visualization(
+                c_means, c_sds, classes, None, args.viz_steps)
 
             latent_code_ph = tf.placeholder(tf.float32)
             img_tensor = model.sample(

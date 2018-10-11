@@ -78,12 +78,21 @@ def two_leaf_visualization(c_means,
                            classes,
                            active_dims=None,
                            num_steps=3):
-    # assert len(classes) == 2
+    assert len(classes) == 2
     #Start from the average of two classes, varry active_dim(s).
-    initial_mu, initial_sigma = starting_point(classes, c_means, c_sds)
+    if active_dims is not None:
+        initial_mu, initial_sigma = starting_point(classes, c_means, c_sds)
+        target_mu = None
+    else:
+        initial_mu = c_means[classes[0]]
+        target_mu = c_means[classes[1]]
+        initial_sigma = None
     latent_code = evaluation_spacing(initial_mu, initial_sigma, active_dims,
-                                     None, num_steps)
-    if active_dims.size == 1: base_filename = 'Dim_{}'.format(active_dims)
+                                     target_mu, num_steps)
+    if active_dims is None:
+        base_filename = 'AllDim_'
+    elif active_dims.size == 1:
+        base_filename = 'Dim_{}'.format(active_dims)
     else:
         base_filename = 'Dims' + ['_{}'.format(i) for i in active_dims]
     base_filename += '_Classes'
