@@ -52,7 +52,8 @@ def evaluation_spacing(mu,
     idxs = np.linspace(-1 * num_steps, num_steps, num=(2 * num_steps + 1))
 
     # calculate the delta each step should take
-    step_delta = (target_mu - mu) / num_steps if target_mu else sigma
+    step_delta = (
+        target_mu - mu) / num_steps if target_mu is not None else sigma
 
     # zero for non-active dimensions
     mask = np.zeros_like(step_delta)
@@ -83,17 +84,16 @@ def two_leaf_visualization(c_means,
     latent_code = evaluation_spacing(initial_mu, initial_sigma, active_dims,
                                      None, num_steps)
     if active_dims.size == 1: base_filename = 'Dim_{}'.format(active_dims)
-    else: 
-      base_filename = 'Dims' + ['_{}'.format(i) for i in active_dims]
+    else:
+        base_filename = 'Dims' + ['_{}'.format(i) for i in active_dims]
     base_filename += '_Classes'
     for i in classes:
-      base_filename+= '_{}'.format(i)
+        base_filename += '_{}'.format(i)
     #base_filename += ['_{}'.format(i) for i in classes]
 
-    sds = np.linspace(-1*num_steps, num_steps, 2*num_steps + 1)
+    sds = np.linspace(-1 * num_steps, num_steps, 2 * num_steps + 1)
 
-    filenames = [ base_filename + '_SDs_{}'.format(i)
-                  for i in sds ]
+    filenames = [base_filename + '_SDs_{}'.format(i) for i in sds]
     print(filenames)
     return latent_code, filenames
 
