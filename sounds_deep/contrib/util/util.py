@@ -2,44 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
-
-def run_epoch_ops(session,
-                  steps_per_epoch,
-                  verbose_ops_dict={},
-                  silent_ops=[],
-                  feed_dict_fn=lambda: None,
-                  verbose=False):
-    """
-    Args:
-        session (tf.Session): Session with tf.Graph containing the operations
-            passed in `verbose_ops_dict` and `silent_ops`
-        steps_per_epoch (int): number of times to run operations
-        verbose_ops_dict (dict): strings to tf operations whose values will be
-            returned
-        feed_dict_fn (callable): called to retrieve the feed_dict
-            (dict of tf.placeholder to np.array)
-        verbose (bool): whether to use tqdm progressbar on stdout
-    Return:
-        dict of str to np.array parallel to the verbose_ops_dict
-    """
-    verbose_vals = {k: [] for k, v in verbose_ops_dict.items()}
-    if verbose:
-        iterable = tqdm(list(range(steps_per_epoch)))
-    else:
-        iterable = list(range(steps_per_epoch))
-
-    for step in iterable:
-        out = session.run([silent_ops, verbose_ops_dict],
-                          feed_dict=feed_dict_fn())[1]
-        verbose_vals = {
-            k: v + [np.array(out[k])]
-            for k, v in verbose_vals.items()
-        }
-
-    return {
-        k: np.concatenate(v) if v[0].shape != () else np.array(v)
-        for k, v in verbose_vals.items()
-    }
+from sounds_deep.util.basic import run_epoch_ops
 
 
 def train(session,
