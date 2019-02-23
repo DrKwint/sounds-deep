@@ -82,15 +82,42 @@ def load_cifar10(data_dir):
     return train_data, train_labels, test_data, test_labels
 
 
+# def load_celeba(data_dir):
+#     """
+#     Returns:
+#       4-tuple of an indexable of images, train indices, test indices, and attributes
+#     """
+#     import sounds_deep.contrib.data.celeba as celeba
+#     idxable = celeba.CelebA(data_dir)
+#     # train_idxs, val_idxs, test_idxs, attribute_names, attributes
+#     return idxable, idxable.train_idxs, idxable.test_idxs, idxable.attributes
+
 def load_celeba(data_dir):
+    """Returns CelebA as (train_data, train_labels, test_data, test_labels)
+
+        Shapes are (162770, 64, 64, 3), (162770, 2), (19962, 64, 64, 3), (19962, 10)
+        Data is in [0,1] and labels are one-hot
     """
-    Returns:
-      4-tuple of an indexable of images, train indices, test indices, and attributes
-    """
-    import sounds_deep.contrib.data.celeba as celeba
-    idxable = celeba.CelebA(data_dir)
-    # train_idxs, val_idxs, test_idxs, attribute_names, attributes
-    return idxable, idxable.train_idxs, idxable.test_idxs, idxable.attributes
+    train_data = np.load(os.path.join(data_dir, 'celeba_train_imgs.npy')).astype('float32') / 255.0
+    test_data = np.load(os.path.join(data_dir, 'celeba_test_imgs.npy')).astype('float32') / 255.0
+
+    info_pak = np.load(os.path.join(data_dir, 'celeba_attr.npz'))
+    train_idxs = info_pak['train_idxs']
+    val_idxs = info_pak['val_idxs']
+    test_idxs = info_pak['test_idxs']
+    attribute_names = info_pak['attribute_names']
+    attributes = info_pak['attributes']
+    male_attr_idx = 20
+
+    def get_label(idxs):
+        label = attributes[idxs][:, male_attr_idx].reshape([-1, 1])
+        label = np.append(label, 1-label, 1)
+        return label
+
+    train_label = get_label(train_idxs).astype('float32')
+    test_label = get_label(test_idxs).astype('float32')
+
+    return train_data, train_label, test_data, test_label
 
 
 def load_sudoku(data_dir):

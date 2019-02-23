@@ -85,16 +85,24 @@ print(vars(args))
 if args.dataset == 'cifar10':
     train_data, train_labels, test_data, test_labels = data.load_cifar10(
         './data/cifar10/')
+    class_num = 10
 elif args.dataset == 'mnist':
     train_data, train_labels, test_data, test_labels = data.load_mnist(
         './data/mnist/')
     train_data = np.reshape(train_data, [-1, 28, 28, 1])
     test_data = np.reshape(test_data, [-1, 28, 28, 1])
+    class_num = 10
 elif args.dataset == 'fmnist':
     train_data, train_labels, test_data, test_labels = data.load_fmnist(
         './data/fmnist/')
     train_data = np.reshape(train_data, [-1, 28, 28, 1])
     test_data = np.reshape(test_data, [-1, 28, 28, 1])
+    class_num = 10
+elif args.dataset == 'celeba':
+    train_data, train_labels, test_data, test_labels = data.load_celeba(
+        './data/celeba/'
+    )
+    class_num = 2
 
 train_data_shape = (args.batch_size, ) + train_data.shape[1:]
 test_data_shape = (args.batch_size, ) + test_data.shape[1:]
@@ -153,6 +161,41 @@ elif args.dataset == 'mnist' or args.dataset == 'fmnist':
                       784]), lambda x: tf.reshape(x, [-1, 28, 28, 1])
     ])
     output_distribution_fn = vae.BERNOULLI_FN
+elif args.dataset == 'celeba':
+    encoder_module = snt.Sequential([
+        snt.Conv2D(16, 3),
+        snt.Residual(snt.Conv2D(16, 3)),
+        snt.Residual(snt.Conv2D(16, 3)), scaling.squeeze2d,
+        snt.Conv2D(64, 3),
+        snt.Residual(snt.Conv2D(64, 3)),
+        snt.Residual(snt.Conv2D(64, 3)), scaling.squeeze2d,
+        snt.Conv2D(64, 3),
+        snt.Residual(snt.Conv2D(64, 3)),
+        snt.Residual(snt.Conv2D(64, 3)), scaling.squeeze2d,
+        snt.Conv2D(128, 3),
+        snt.Residual(snt.Conv2D(128, 3)),
+        snt.Residual(snt.Conv2D(128, 3)), scaling.squeeze2d,
+        snt.Conv2D(128, 3),
+        snt.Residual(snt.Conv2D(128, 3)),
+        snt.Residual(snt.Conv2D(128, 3)), scaling.squeeze2d,
+        snt.Conv2D(256, 3),
+        snt.Residual(snt.Conv2D(256, 3)),
+        snt.Residual(snt.Conv2D(256, 3)), scaling.squeeze2d,
+        tf.keras.layers.Flatten(),
+        snt.Linear(100)
+    ])
+    decoder_module = snt.Sequential([
+                                        lambda x: tf.reshape(x, [-1, 1, 1, args.latent_dimension]),
+                                        snt.Conv2D(32, 3),
+                                        snt.Residual(snt.Conv2D(32, 3)),
+                                        snt.Residual(snt.Conv2D(32, 3))
+                                    ] + [
+                                        scaling.unsqueeze2d,
+                                        snt.Conv2D(32, 3),
+                                        snt.Residual(snt.Conv2D(32, 3)),
+                                        snt.Residual(snt.Conv2D(32, 3))
+                                    ] * 6 + [snt.Conv2D(3, 3)])
+    output_distribution_fn = discretized_logistic.DiscretizedLogistic
 
 
 def train_feed_dict_fn():
@@ -192,7 +235,7 @@ decision_tree = sklearn.tree.DecisionTreeClassifier(
 model = cpvae.CPVAE(
     args.latent_dimension,
     args.max_leaf_nodes,
-    10,
+    class_num,
     decision_tree,
     encoder_module,
     decoder_module,
@@ -295,8 +338,8 @@ with tf.Session(config=config) as session:
 
         def exit_fn(session, epoch, validate_dict):
             # save decoder samples of each class
-            for c in range(10):
-                cluster_probs = np.zeros([args.batch_size, 10], dtype=float)
+            for c in range(class_num):
+                cluster_probs = np.zeros([args.batch_size, class_num], dtype=float)
                 cluster_probs[:, c] = 1.
                 generated_img = session.run(sample,
                                             {cluster_prob_ph: cluster_probs})
