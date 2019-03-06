@@ -98,8 +98,8 @@ def load_celeba(data_dir):
         Shapes are (162770, 64, 64, 3), (162770, 2), (19962, 64, 64, 3), (19962, 10)
         Data is in [0,1] and labels are one-hot
     """
-    train_data = np.load(os.path.join(data_dir, 'celeba_train_imgs.npy')).astype('float32') / 255.0
-    test_data = np.load(os.path.join(data_dir, 'celeba_test_imgs.npy')).astype('float32') / 255.0
+    train_data = np.load(os.path.join(data_dir, 'celeba_train_imgs.npy')) / 255.0
+    test_data = np.load(os.path.join(data_dir, 'celeba_test_imgs.npy')) / 255.0
 
     info_pak = np.load(os.path.join(data_dir, 'celeba_attr.npz'))
     train_idxs = info_pak['train_idxs']
@@ -109,13 +109,25 @@ def load_celeba(data_dir):
     attributes = info_pak['attributes']
     male_attr_idx = 20
 
-    def get_label(idxs):
-        label = attributes[idxs][:, male_attr_idx].reshape([-1, 1])
-        label = np.append(label, 1-label, 1)
-        return label
+    def get_label(data, idxs):
+        def jj(attr):
+            important_attributes_idx = [0, 1, 4, 9, 16, 18, 22, 24, 29, 30, 34, 36, 37, 38]
+            x = np.array([0 for i in range(attr.shape[0])])
+            for i in important_attributes_idx:
+                x = x + attr[:, i]
+            return x
 
-    train_label = get_label(train_idxs).astype('float32')
-    test_label = get_label(test_idxs).astype('float32')
+        label = attributes[idxs]
+        sig = jj(label) >= 1
+        label = label[sig]
+        data = data[sig]
+
+        label = label[:, 20].reshape([-1, 1])
+        label = np.append(label, 1 - label, 1)
+        return data, label
+
+    train_data, train_label = get_label(train_data, train_idxs)
+    test_data, test_label = get_label(test_data, test_idxs)
 
     return train_data, train_label, test_data, test_label
 
