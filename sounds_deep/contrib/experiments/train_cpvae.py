@@ -95,6 +95,9 @@ elif args.dataset == 'fmnist':
         './data/fmnist/')
     train_data = np.reshape(train_data, [-1, 28, 28, 1])
     test_data = np.reshape(test_data, [-1, 28, 28, 1])
+elif args.dataset == 'celeba':
+    train_data, train_labels, test_data, test_labels = data.load_celeba(
+        './data/celeb_a/')
 
 train_data_shape = (args.batch_size, ) + train_data.shape[1:]
 test_data_shape = (args.batch_size, ) + test_data.shape[1:]

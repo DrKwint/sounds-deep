@@ -11,7 +11,7 @@ from subprocess import Popen
 from contextlib import contextmanager
 
 import numpy as np
-from scipy.ndimage import imread
+from imageio import imread
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +38,6 @@ class CelebA(object):
          Deep Learning Face Attributes in the Wild. Proceedings of
          International Conference on Computer Vision (ICCV), December, 2015.
     '''
-
     def __init__(self, data_dir):
         self.name = 'celeba'
         self.n_imgs = 202599
@@ -103,13 +102,12 @@ class CelebA(object):
             attributes = np.array(attributes)
 
             with open(self._npz_path, 'wb') as f:
-                np.savez(
-                    f,
-                    train_idxs=train_idxs,
-                    val_idxs=val_idxs,
-                    test_idxs=test_idxs,
-                    attribute_names=attribute_names,
-                    attributes=attributes)
+                np.savez(f,
+                         train_idxs=train_idxs,
+                         val_idxs=val_idxs,
+                         test_idxs=test_idxs,
+                         attribute_names=attribute_names,
+                         attributes=attributes)
 
     def _load(self):
         with open(self._npz_path, 'rb') as f:
@@ -164,8 +162,8 @@ def archive_extract(filepath, target_dir):
         cmd = 'gzip -d %s' % filepath
         retval = Popen(cmd, shell=True).wait()
         if retval != 0:
-            raise RuntimeError(
-                'Archive file extraction failed for %s.' % filepath)
+            raise RuntimeError('Archive file extraction failed for %s.' %
+                               filepath)
     else:
         raise ValueError('% is not a supported archive file.' % filepath)
 
